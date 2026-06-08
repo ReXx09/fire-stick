@@ -1,0 +1,28 @@
+services:
+  fire-kiosk-dashboard:
+    build: .
+    image: ghcr.io/rexx09/fire-kiosk-dashboard:latest
+    container_name: fire-kiosk-dashboard
+    restart: unless-stopped
+    ports:
+      - "3200:3000"
+    volumes:
+      - ${DATA_PATH:-./data}:/app/data
+      - ${ADB_KEYS_PATH:-./adb-keys}:/root/.android
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - PUBLIC_PORT=${PUBLIC_PORT:-3200}
+      - FIRE_FEATURES_ENABLED=true
+      - FIRESTICK_IP=${FIRESTICK_IP:-192.168.8.177}
+      - SERVER_IP=${SERVER_IP:-}
+
+  watchtower:
+    image: containrrr/watchtower
+    container_name: fire-kiosk-watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: --interval 300 --cleanup fire-kiosk-dashboard
+    # Prüft alle 5 Minuten ob ein neues Image auf GHCR verfügbar ist.
+    # Sobald GitHub Actions ein neues Image pusht → automatischer Pull + Neustart.

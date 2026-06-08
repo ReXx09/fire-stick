@@ -1,0 +1,44 @@
+[
+  {
+    "slot": 1,
+    "name": "Thomas",
+    "active": true,
+    "color": "#457b9d"
+  },
+  {
+    "slot": 2,
+    "name": "MICHE",
+    "active": true,
+    "color": "#f4a261"
+  },
+  {
+    "slot": 3,
+    "name": "",
+    "active": false
+  },
+  {
+    "slot": 4,
+    "name": "",
+    "active": false
+  },
+  {
+    "slot": 5,
+    "name": "",
+    "active": false
+  },
+  {
+    "slot": 6,
+    "name": "",
+    "active": false
+  },
+  {
+    "slot": 7,
+    "name": "",
+    "active": false
+  },
+  {
+    "slot": 8,
+    "name": "",
+    "active": false
+  }
+]

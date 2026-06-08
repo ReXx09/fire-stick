@@ -1,0 +1,29 @@
+{
+  "wm2026": {
+    "title": "WM 2026",
+    "icon": "🌍",
+    "description": "FIFA Weltmeisterschaft 2026 – Spielplan",
+    "badge": "Extern",
+    "color": "#2a9d8f",
+    "route": "https://rexx09.github.io/wm2026-dashboard/",
+    "external": false
+  },
+  "grafana": {
+    "title": "Grafana",
+    "icon": "📊",
+    "description": "Metriken, Graphen & Monitoring",
+    "badge": "Monitoring",
+    "color": "#f46800",
+    "route": "http://192.168.8.115:9500",
+    "external": false
+  },
+  "live-spielstand": {
+    "title": "PI-VPN",
+    "icon": "⚡",
+    "description": "Dashboard",
+    "badge": "Live",
+    "color": "#f4a261",
+    "route": "http://190.168.178.66:8080/",
+    "external": false
+  }
+}

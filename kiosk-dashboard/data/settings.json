@@ -1,0 +1,9 @@
+{
+  "hubTitle": "Löwen Dart – Kiosk Hub",
+  "autoReloadMinutes": 5,
+  "screensaverEnabled": true,
+  "screensaverMinutes": 2,
+  "adbPath": "C:\\Program Files (x86)\\Touch Portal\\plugins\\adb\\platform-tools\\adb.exe",
+  "firestickIp": "192.168.8.177",
+  "serverIp": "192.168.8.111"
+}

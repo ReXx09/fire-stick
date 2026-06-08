@@ -1,0 +1,23 @@
+[
+  {
+    "id": "m-yt",
+    "title": "YouTube",
+    "icon": "▶️",
+    "url": "https://www.youtube.com",
+    "color": "#FF0000"
+  },
+  {
+    "id": "m-pv",
+    "title": "Prime Video",
+    "icon": "📺",
+    "url": "https://www.primevideo.com",
+    "color": "#FF9900"
+  },
+  {
+    "id": "m-sp",
+    "title": "Spotify",
+    "icon": "🎵",
+    "url": "https://open.spotify.com",
+    "color": "#1DB954"
+  }
+]
