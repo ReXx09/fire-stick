@@ -95,8 +95,8 @@
     .settings-card h3{font-size:.72rem;text-transform:uppercase;letter-spacing:2px;color:#444}
     .field{display:flex;flex-direction:column;gap:5px}
     .field label{font-size:.75rem;color:#555}
-    .field input,.field textarea{background:#0f0f0f;border:1px solid #222;border-radius:8px;color:#f1f1f1;padding:9px 13px;font-size:.88rem;outline:none;font-family:inherit;width:100%;transition:border-color .2s}
-    .field input:focus,.field textarea:focus{border-color:#e63946}
+    .field input,.field textarea,.field select{background:#0f0f0f;border:1px solid #222;border-radius:8px;color:#f1f1f1;padding:9px 13px;font-size:.88rem;outline:none;font-family:inherit;width:100%;transition:border-color .2s}
+    .field input:focus,.field textarea:focus,.field select:focus{border-color:#e63946}
     .kiosk-box{background:#0f0f0f;border:1px solid #222;border-radius:8px;padding:12px 16px;font-family:monospace;font-size:.88rem;color:#2a9d8f;word-break:break-all;user-select:all}
     .info-txt{font-size:.75rem;color:#3a3a3a;line-height:1.65}
     .save-row{display:flex;justify-content:flex-end}
@@ -349,6 +349,64 @@
       </div>
 
       <div class="settings-card">
+        <h3>Fernbedienungstasten zuweisen</h3>
+        <p class="info-txt">Lege fest, welche Funktion bei Back, Menu und Play/Pause ausgeführt wird. Änderungen gelten für Hub und Admin.</p>
+        <div class="fgrid">
+          <div class="field">
+            <label>Hub Back-Taste</label>
+            <select id="rk-hub-back">
+              <option value="close_modal_or_back">Modal schließen, sonst zurück</option>
+              <option value="open_admin">Admin öffnen</option>
+              <option value="none">Keine Aktion</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Hub Menu-Taste</label>
+            <select id="rk-hub-menu">
+              <option value="open_admin">Admin öffnen</option>
+              <option value="reload_hub">Hub neu laden</option>
+              <option value="none">Keine Aktion</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Hub Play/Pause</label>
+            <select id="rk-hub-playpause">
+              <option value="reload_hub">Hub neu laden</option>
+              <option value="open_admin">Admin öffnen</option>
+              <option value="none">Keine Aktion</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Admin Back-Taste</label>
+            <select id="rk-admin-back">
+              <option value="close_modal_or_hub">Modal schließen, sonst Hub</option>
+              <option value="close_modal">Nur Modal schließen</option>
+              <option value="none">Keine Aktion</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Admin Menu-Taste</label>
+            <select id="rk-admin-menu">
+              <option value="open_quick_actions">Quick Actions öffnen</option>
+              <option value="open_overview">Übersicht öffnen</option>
+              <option value="none">Keine Aktion</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Admin Play/Pause</label>
+            <select id="rk-admin-playpause">
+              <option value="refresh_admin">Admin aktualisieren</option>
+              <option value="reload_page">Seite neu laden</option>
+              <option value="none">Keine Aktion</option>
+            </select>
+          </div>
+        </div>
+        <div class="save-row">
+          <button class="btn btn-primary" onclick="saveRemoteKeymap()">Tastenbelegung speichern</button>
+        </div>
+      </div>
+
+      <div class="settings-card">
         <h3>&#128246; Fire TV – Fernsteuerung</h3>
         <p class="info-txt">Screenshot vom Fire TV aufnehmen &ndash; dann einfach auf den Button im Bild klicken um ihn zu bestätigen.</p>
         <div style="display:flex;flex-direction:column;gap:10px;margin-top:4px">
@@ -466,10 +524,42 @@
 <footer>Löwen Dart Club – Admin-Panel</footer>
 
 <script>
+  const DEFAULT_REMOTE_KEYMAP = {
+    hub: {
+      back: 'close_modal_or_back',
+      menu: 'open_admin',
+      playpause: 'reload_hub'
+    },
+    admin: {
+      back: 'close_modal_or_hub',
+      menu: 'open_quick_actions',
+      playpause: 'refresh_admin'
+    }
+  };
+
+  function normalizeRemoteKeymap(raw) {
+    const map = raw && typeof raw === 'object' ? raw : {};
+    const hub = map.hub && typeof map.hub === 'object' ? map.hub : {};
+    const admin = map.admin && typeof map.admin === 'object' ? map.admin : {};
+    return {
+      hub: {
+        back: typeof hub.back === 'string' ? hub.back : DEFAULT_REMOTE_KEYMAP.hub.back,
+        menu: typeof hub.menu === 'string' ? hub.menu : DEFAULT_REMOTE_KEYMAP.hub.menu,
+        playpause: typeof hub.playpause === 'string' ? hub.playpause : DEFAULT_REMOTE_KEYMAP.hub.playpause
+      },
+      admin: {
+        back: typeof admin.back === 'string' ? admin.back : DEFAULT_REMOTE_KEYMAP.admin.back,
+        menu: typeof admin.menu === 'string' ? admin.menu : DEFAULT_REMOTE_KEYMAP.admin.menu,
+        playpause: typeof admin.playpause === 'string' ? admin.playpause : DEFAULT_REMOTE_KEYMAP.admin.playpause
+      }
+    };
+  }
+
   // ── State ──
   let allFixed  = [];
   let allCustom = [];
   let editState = null; // { type: 'new'|'fixed'|'custom', id }
+  let remoteKeymap = normalizeRemoteKeymap(null);
 
   // ── Boot ──
   (async () => {
@@ -557,6 +647,7 @@
     fillModal({ icon: '', badge: 'Custom', title: '', description: '', route: '', color: '#6c757d', external: false });
     livePreview();
     document.getElementById('modalOverlay').classList.add('open');
+    focusModalPrimaryField(false);
   }
 
   function openEdit(id, isFixed) {
@@ -567,6 +658,20 @@
     fillModal(data);
     livePreview();
     document.getElementById('modalOverlay').classList.add('open');
+    focusModalPrimaryField(true);
+  }
+
+  function focusModalPrimaryField(selectAll) {
+    const input = document.getElementById('m-title');
+    if (!input) return;
+    // Fire-TV/Remote: Fokus und Caret sichtbar in das wichtigste Eingabefeld setzen.
+    setTimeout(() => {
+      input.focus();
+      try {
+        if (selectAll) input.select();
+        else input.setSelectionRange(input.value.length, input.value.length);
+      } catch {}
+    }, 30);
   }
 
   function fillModal(d) {
@@ -608,10 +713,76 @@
     if (firstQuick) firstQuick.focus();
   }
 
+  function applyRemoteKeymapToForm() {
+    document.getElementById('rk-hub-back').value = remoteKeymap.hub.back;
+    document.getElementById('rk-hub-menu').value = remoteKeymap.hub.menu;
+    document.getElementById('rk-hub-playpause').value = remoteKeymap.hub.playpause;
+    document.getElementById('rk-admin-back').value = remoteKeymap.admin.back;
+    document.getElementById('rk-admin-menu').value = remoteKeymap.admin.menu;
+    document.getElementById('rk-admin-playpause').value = remoteKeymap.admin.playpause;
+  }
+
+  function readRemoteKeymapFromForm() {
+    return normalizeRemoteKeymap({
+      hub: {
+        back: document.getElementById('rk-hub-back').value,
+        menu: document.getElementById('rk-hub-menu').value,
+        playpause: document.getElementById('rk-hub-playpause').value
+      },
+      admin: {
+        back: document.getElementById('rk-admin-back').value,
+        menu: document.getElementById('rk-admin-menu').value,
+        playpause: document.getElementById('rk-admin-playpause').value
+      }
+    });
+  }
+
   async function softRefreshAdmin() {
     await loadAll();
     await loadSettingsForm();
     showToast('Aktualisiert \u2713');
+  }
+
+  function executeAdminRemoteAction(mapping, modalOpen, typing) {
+    if (!mapping || mapping === 'none') return false;
+
+    if (mapping === 'close_modal_or_hub') {
+      if (modalOpen) {
+        closeModal();
+        return true;
+      }
+      if (typing) return false;
+      window.location.href = '/';
+      return true;
+    }
+
+    if (mapping === 'close_modal') {
+      if (modalOpen) {
+        closeModal();
+        return true;
+      }
+      return false;
+    }
+
+    if (typing) return false;
+
+    if (mapping === 'open_quick_actions') {
+      openQuickActions();
+      return true;
+    }
+    if (mapping === 'open_overview') {
+      selectSection('overview');
+      return true;
+    }
+    if (mapping === 'refresh_admin') {
+      softRefreshAdmin().catch(() => showToast('Aktualisierung fehlgeschlagen'));
+      return true;
+    }
+    if (mapping === 'reload_page') {
+      location.reload();
+      return true;
+    }
+    return false;
   }
 
   document.getElementById('modalOverlay').addEventListener('click', e => {
@@ -624,33 +795,9 @@
 
     const modalOpen = document.getElementById('modalOverlay').classList.contains('open');
     const typing = isTypingTarget(e.target);
-
-    if (action === 'back') {
-      if (modalOpen) {
-        e.preventDefault();
-        closeModal();
-        return;
-      }
-      if (typing) return;
-      e.preventDefault();
-      window.location.href = '/';
-      return;
-    }
-
-    if (typing) return;
-
-    if (action === 'menu') {
-      e.preventDefault();
-      openQuickActions();
-      return;
-    }
-
-    if (action === 'playpause') {
-      e.preventDefault();
-      softRefreshAdmin().catch(() => {
-        showToast('Aktualisierung fehlgeschlagen');
-      });
-    }
+    const mapping = remoteKeymap.admin[action];
+    const handled = executeAdminRemoteAction(mapping, modalOpen, typing);
+    if (handled) e.preventDefault();
   });
 
   // ── Live preview ──
@@ -781,7 +928,20 @@
     document.getElementById('s-adbpath').value = s.adbPath || '';
     document.getElementById('s-firestickip').value = s.firestickIp || '';
     document.getElementById('detectedIpHint').textContent = info.detectedIp ? `(erkannt: ${info.detectedIp})` : '';
+    remoteKeymap = normalizeRemoteKeymap(s.remoteKeymap);
+    applyRemoteKeymapToForm();
     updateKioskUrl();
+  }
+
+  async function saveRemoteKeymap() {
+    const nextMap = readRemoteKeymapFromForm();
+    await fetch('/api/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ remoteKeymap: nextMap })
+    });
+    remoteKeymap = nextMap;
+    showToast('Tastenbelegung gespeichert ✓');
   }
 
   function updateKioskUrl() {
