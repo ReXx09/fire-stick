@@ -1,6 +1,5 @@
 services:
   fire-kiosk-dashboard:
-    build: .
     image: ghcr.io/rexx09/fire-kiosk-dashboard:latest
     container_name: fire-kiosk-dashboard
     restart: unless-stopped
