@@ -22,8 +22,8 @@
     .btn-restart-hd:disabled{opacity:.45;cursor:not-allowed}
 
     /* ADMIN SHELL */
-    .admin-shell{display:grid;grid-template-columns:280px minmax(0,1fr);gap:28px;flex:1;padding:26px 36px 34px;max-width:1400px;margin:0 auto;width:100%}
-    .side-nav{position:sticky;top:20px;align-self:start;background:linear-gradient(180deg,#131313 0%,#0d0d0d 100%);border:1px solid #1d1d1d;border-radius:18px;padding:20px 16px;display:flex;flex-direction:column;gap:18px}
+    .admin-shell{display:flex;align-items:flex-start;gap:28px;flex:1;padding:26px 36px 34px;max-width:1400px;margin:0 auto;width:100%}
+    .side-nav{position:sticky;top:20px;align-self:flex-start;flex:0 0 280px;width:280px;background:linear-gradient(180deg,#131313 0%,#0d0d0d 100%);border:1px solid #1d1d1d;border-radius:18px;padding:20px 16px;display:flex;flex-direction:column;gap:18px}
     .nav-block{display:flex;flex-direction:column;gap:8px}
     .nav-label{font-size:.68rem;text-transform:uppercase;letter-spacing:2.5px;color:#4a4a4a;padding:0 10px}
     .nav-btn{background:none;border:1px solid transparent;color:#787878;padding:12px 14px;border-radius:12px;cursor:pointer;font-size:.9rem;font-family:inherit;display:flex;align-items:flex-start;gap:12px;text-align:left;transition:background .18s,border-color .18s,color .18s,transform .18s}
@@ -34,7 +34,7 @@
     .nav-btn.active span{color:#b08d92}
     .nav-ic{font-size:1.1rem;line-height:1.2;width:22px;text-align:center;flex-shrink:0;margin-top:1px}
 
-    .content-area{display:flex;flex-direction:column;gap:22px;min-width:0}
+    .content-area{display:flex;flex:1 1 auto;flex-direction:column;gap:22px;min-width:0;max-width:calc(100% - 308px)}
     .content-section{display:none;flex-direction:column;gap:22px}
     .content-section.active{display:flex}
     .section-hero{background:radial-gradient(circle at top left,rgba(230,57,70,.18),transparent 40%),linear-gradient(180deg,#151515 0%,#0f0f0f 100%);border:1px solid #222;border-radius:18px;padding:26px 28px;display:flex;flex-direction:column;gap:18px}
@@ -65,8 +65,9 @@
 
     /* TILE ROWS */
     .tile-list{display:flex;flex-direction:column;gap:5px}
-    .tile-row{display:flex;align-items:center;gap:10px;background:#141414;border-radius:10px;padding:11px 14px;transition:background .15s;min-height:48px}
+    .tile-row{display:flex;align-items:center;gap:10px;background:#141414;border-radius:10px;padding:11px 14px;transition:background .15s,opacity .15s;min-height:48px}
     .tile-row:hover{background:#1a1a1a}
+    .tile-row.is-hidden{opacity:.58;background:#101010}
     .tile-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
     .tile-ic{font-size:1.25rem;width:30px;text-align:center;flex-shrink:0}
     .tile-name{font-size:.9rem;font-weight:600;min-width:130px;max-width:160px;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -137,8 +138,9 @@
     footer{text-align:center;padding:14px;font-size:.7rem;color:#1e1e1e;border-top:1px solid #111;flex-shrink:0}
 
     @media (max-width: 1080px){
-      .admin-shell{grid-template-columns:1fr;padding:20px 18px 28px}
+      .admin-shell{display:flex;flex-direction:column;padding:20px 18px 28px}
       .side-nav{position:static}
+      .content-area{max-width:none;width:100%}
       .hero-grid,.quick-grid{grid-template-columns:1fr}
     }
 
@@ -239,7 +241,7 @@
         <div class="sec-hd">
           <span class="sec-title">Feste Dashboards</span>
           <div class="sec-line"></div>
-          <span class="sec-hint">URL, Icon und Farbe editierbar</span>
+          <span class="sec-hint">Bearbeiten, ausblenden und wieder einblenden</span>
         </div>
         <div id="fixedList" class="tile-list"></div>
       </div>
@@ -480,7 +482,7 @@
   // ── Data ──
   async function loadAll() {
     [allFixed, allCustom] = await Promise.all([
-      fetch('/api/dashboards/fixed').then(r => r.json()),
+      fetch('/api/dashboards/fixed?includeHidden=true').then(r => r.json()),
       fetch('/api/dashboards/custom').then(r => r.json())
     ]);
     renderList('fixedList',  allFixed,  true);
@@ -501,16 +503,19 @@
   function makeTileRow(d, isFixed) {
     const row = document.createElement('div');
     row.className = 'tile-row';
+    if (d.hidden) row.classList.add('is-hidden');
     row.innerHTML =
       '<span class="tile-dot" style="background:' + d.color + '"></span>' +
       '<span class="tile-ic">' + (d.icon || '🔗') + '</span>' +
       '<span class="tile-name">' + esc(d.title) +
         (isFixed ? '<span class="fixed-tag">fest</span>' : '') + '</span>' +
       '<span class="tile-url" title="' + esc(d.route) + '">' + esc(d.route) + '</span>' +
-      '<span class="tile-bdg" style="background:' + d.color + '22;color:' + d.color + '">' + esc(d.badge || '') + '</span>' +
+      '<span class="tile-bdg" style="background:' + d.color + '22;color:' + d.color + '">' + esc(d.hidden ? 'Ausgeblendet' : (d.badge || '')) + '</span>' +
       '<div class="tile-acts">' +
         '<button class="btn btn-edit2" onclick="openEdit(\'' + d.id + '\',' + isFixed + ')">✏ Bearbeiten</button>' +
-        (!isFixed ? '<button class="btn btn-del2" onclick="deleteTile(\'' + d.id + '\')">✕ Löschen</button>' : '') +
+        (isFixed
+          ? '<button class="btn btn-del2" onclick="toggleFixedTile(\'' + d.id + '\',' + (!d.hidden) + ')">' + (d.hidden ? '↺ Einblenden' : '✕ Ausblenden') + '</button>'
+          : '<button class="btn btn-del2" onclick="deleteTile(\'' + d.id + '\')">✕ Löschen</button>') +
       '</div>';
     return row;
   }
@@ -538,7 +543,11 @@
     document.querySelectorAll('.content-section').forEach(panel => {
       panel.classList.toggle('active', panel.id === 'section-' + section);
     });
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    try {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch {
+      window.scrollTo(0, 0);
+    }
   }
 
   // ── Modal open ──
@@ -649,6 +658,24 @@
     const res = await fetch('/api/dashboards/custom/' + id, { method: 'DELETE' });
     if (res.ok) { await loadAll(); showToast('Gelöscht'); }
     else alert('Fehler beim Löschen.');
+  }
+
+  async function toggleFixedTile(id, hide) {
+    const tile = allFixed.find(x => x.id === id);
+    if (!tile) return;
+    const action = hide ? 'ausblenden' : 'einblenden';
+    if (!confirm('"' + tile.title + '" wirklich ' + action + '?')) return;
+    const res = await fetch('/api/dashboards/fixed/' + id, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hidden: hide })
+    });
+    if (res.ok) {
+      await loadAll();
+      showToast(hide ? 'Kachel ausgeblendet' : 'Kachel eingeblendet');
+    } else {
+      alert('Fehler beim Aktualisieren der Kachel.');
+    }
   }
 
   async function saveAdbSettings() {

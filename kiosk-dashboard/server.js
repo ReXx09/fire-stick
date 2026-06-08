@@ -81,7 +81,11 @@ function writeJson(file, data) {
   fs.writeFileSync(file, JSON.stringify(data, null, 2), 'utf8');
 }
 
-function getFixed()    { const ov = readJson(OVERRIDES_FILE, {}); return fixedDefaults.map(d => ({ ...d, ...(ov[d.id] || {}) })); }
+function getFixed(includeHidden = false) {
+  const ov = readJson(OVERRIDES_FILE, {});
+  const list = fixedDefaults.map(d => ({ ...d, ...(ov[d.id] || {}) }));
+  return includeHidden ? list : list.filter(d => !d.hidden);
+}
 function getCustom()   { return readJson(CUSTOM_FILE, []); }
 function saveCustom(l) { writeJson(CUSTOM_FILE, l); }
 function getSettings() {
@@ -106,7 +110,10 @@ function getPlayers() {
 function savePlayers(list) { writeJson(PLAYERS_FILE, list); }
 
 // ── Fixed tiles ──
-app.get('/api/dashboards/fixed', (req, res) => res.json(getFixed()));
+app.get('/api/dashboards/fixed', (req, res) => {
+  const includeHidden = String(req.query.includeHidden || 'false').toLowerCase() === 'true';
+  res.json(getFixed(includeHidden));
+});
 app.put('/api/dashboards/fixed/:id', (req, res) => {
   const def = fixedDefaults.find(d => d.id === req.params.id);
   if (!def) return res.status(404).json({ error: 'Nicht gefunden' });
