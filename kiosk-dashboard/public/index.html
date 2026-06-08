@@ -273,6 +273,58 @@
     }
     document.getElementById('modalOverlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeModal();});
     document.getElementById('modalOverlay').addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
+
+    function isTypingTarget(target){
+      if(!target||!(target instanceof Element))return false;
+      return !!target.closest('input, textarea, select, [contenteditable="true"]');
+    }
+
+    function getRemoteAction(e){
+      const key=(e.key||'').toLowerCase();
+      const code=Number(e.keyCode||e.which||0);
+
+      if(key==='browserback'||key==='goback'||key==='escape'||key==='backspace'||code===4||code===8||code===27||code===461||code===10009)return 'back';
+      if(key==='mediaplaypause'||key==='playpause'||code===85||code===179)return 'playpause';
+      if(key==='contextmenu'||key==='menu'||code===82||code===93)return 'menu';
+
+      return null;
+    }
+
+    document.addEventListener('keydown',function(e){
+      const action=getRemoteAction(e);
+      if(!action)return;
+
+      const modalOpen=document.getElementById('modalOverlay').classList.contains('open');
+      const typing=isTypingTarget(e.target);
+
+      if(action==='back'){
+        if(modalOpen){
+          e.preventDefault();
+          closeModal();
+          return;
+        }
+        if(typing)return;
+        if(window.history.length>1){
+          e.preventDefault();
+          window.history.back();
+        }
+        return;
+      }
+
+      if(typing)return;
+
+      if(action==='playpause'){
+        e.preventDefault();
+        manualReload();
+        return;
+      }
+
+      if(action==='menu'){
+        e.preventDefault();
+        window.location.href='/admin.html';
+      }
+    });
+
     async function saveCard(){
       const title=document.getElementById('f-title').value.trim();
       const route=document.getElementById('f-route').value.trim();
