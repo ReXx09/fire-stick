@@ -27,6 +27,8 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const PUBLIC_PORT = process.env.PUBLIC_PORT || PORT;
 const FIRE_FEATURES_ENABLED = String(process.env.FIRE_FEATURES_ENABLED || 'true').toLowerCase() === 'true';
+const DART_DASHBOARD_PORT = process.env.DART_DASHBOARD_PORT || '3000';
+const DART_DASHBOARD_URL = process.env.DART_DASHBOARD_URL || `http://${process.env.SERVER_IP || getLocalIP()}:${DART_DASHBOARD_PORT}`;
 
 const DATA_DIR       = path.join(__dirname, 'data');
 const CUSTOM_FILE    = path.join(DATA_DIR, 'custom-dashboards.json');
@@ -63,6 +65,7 @@ app.use(express.json());
 
 const fixedDefaults = [
   { id: 'grafana',        title: 'Grafana',         icon: '📊', description: 'Metriken, Graphen & Monitoring',               color: '#f46800', route: 'http://localhost:3001',                                                          external: true,  badge: 'Monitoring' },
+  { id: 'dart-dashboard', title: 'Dart Dashboard',  icon: '🎯', description: 'Externes Hauptdashboard aus separatem Repository', color: '#e63946', route: DART_DASHBOARD_URL,                                                        external: true,  badge: 'Extern'     },
   { id: 'wm2026',         title: 'WM 2026',          icon: '🌍', description: 'FIFA Weltmeisterschaft 2026 – Spielplan',       color: '#2a9d8f', route: '/panels/wm2026/index.html',                                                      external: false, badge: 'Lokal'      },
   { id: 'privat-dart',    title: 'Privat Dart',      icon: '🎯', description: 'Vereinsinterne Dart-Liga & Turniere',           color: '#e63946', route: '/panels/privat-dart.html',                                                       external: false, badge: 'Lokal'      },
   { id: 'live-spielstand',title: 'Live-Spielstand',  icon: '⚡', description: 'Aktueller Spielstand in Echtzeit',              color: '#f4a261', route: '/panels/live-spielstand.html',                                                   external: false, badge: 'Live'       },

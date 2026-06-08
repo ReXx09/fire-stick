@@ -21,15 +21,40 @@
     .btn-restart-hd:hover{background:#e63946;border-color:#e63946;color:#fff}
     .btn-restart-hd:disabled{opacity:.45;cursor:not-allowed}
 
-    /* TABS */
-    .tabs{background:#0f0f0f;border-bottom:1px solid #1a1a1a;padding:0 36px;display:flex;gap:2px;flex-shrink:0}
-    .tab-btn{background:none;border:none;color:#444;padding:13px 20px;cursor:pointer;font-size:.88rem;font-family:inherit;border-bottom:2px solid transparent;transition:color .2s,border-color .2s;white-space:nowrap}
-    .tab-btn:hover{color:#aaa}
-    .tab-btn.active{color:#f1f1f1;border-bottom-color:#e63946}
+    /* ADMIN SHELL */
+    .admin-shell{display:grid;grid-template-columns:280px minmax(0,1fr);gap:28px;flex:1;padding:26px 36px 34px;max-width:1400px;margin:0 auto;width:100%}
+    .side-nav{position:sticky;top:20px;align-self:start;background:linear-gradient(180deg,#131313 0%,#0d0d0d 100%);border:1px solid #1d1d1d;border-radius:18px;padding:20px 16px;display:flex;flex-direction:column;gap:18px}
+    .nav-block{display:flex;flex-direction:column;gap:8px}
+    .nav-label{font-size:.68rem;text-transform:uppercase;letter-spacing:2.5px;color:#4a4a4a;padding:0 10px}
+    .nav-btn{background:none;border:1px solid transparent;color:#787878;padding:12px 14px;border-radius:12px;cursor:pointer;font-size:.9rem;font-family:inherit;display:flex;align-items:flex-start;gap:12px;text-align:left;transition:background .18s,border-color .18s,color .18s,transform .18s}
+    .nav-btn:hover{background:#171717;border-color:#252525;color:#f1f1f1;transform:translateX(2px)}
+    .nav-btn.active{background:linear-gradient(180deg,#231214 0%,#171717 100%);border-color:#442126;color:#fff;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+    .nav-btn strong{display:block;font-size:.9rem;font-weight:700}
+    .nav-btn span{display:block;font-size:.72rem;color:#5a5a5a;line-height:1.4;margin-top:2px}
+    .nav-btn.active span{color:#b08d92}
+    .nav-ic{font-size:1.1rem;line-height:1.2;width:22px;text-align:center;flex-shrink:0;margin-top:1px}
 
-    /* CONTENT */
-    .tab-pane{display:none;flex:1;padding:30px 36px;max-width:1100px;margin:0 auto;width:100%;flex-direction:column;gap:28px}
-    .tab-pane.active{display:flex}
+    .content-area{display:flex;flex-direction:column;gap:22px;min-width:0}
+    .content-section{display:none;flex-direction:column;gap:22px}
+    .content-section.active{display:flex}
+    .section-hero{background:radial-gradient(circle at top left,rgba(230,57,70,.18),transparent 40%),linear-gradient(180deg,#151515 0%,#0f0f0f 100%);border:1px solid #222;border-radius:18px;padding:26px 28px;display:flex;flex-direction:column;gap:18px}
+    .hero-kicker{font-size:.72rem;text-transform:uppercase;letter-spacing:3px;color:#8b4b51;font-weight:700}
+    .hero-title{font-size:1.55rem;font-weight:700;line-height:1.15}
+    .hero-copy{font-size:.92rem;line-height:1.7;color:#8b8b8b;max-width:760px}
+    .hero-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+    .hero-stat{background:#111;border:1px solid #202020;border-radius:14px;padding:14px 15px;display:flex;flex-direction:column;gap:5px}
+    .hero-stat strong{font-size:1rem}
+    .hero-stat span{font-size:.74rem;color:#666;line-height:1.45}
+    .quick-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+    .quick-link{background:#121212;border:1px solid #242424;border-radius:14px;padding:15px 16px;color:#d6d6d6;cursor:pointer;font-family:inherit;text-align:left;transition:border-color .18s,transform .18s,background .18s}
+    .quick-link:hover{border-color:#e63946;background:#191112;transform:translateY(-1px)}
+    .quick-link strong{display:block;font-size:.88rem;margin-bottom:4px}
+    .quick-link span{display:block;font-size:.75rem;color:#707070;line-height:1.45}
+    .section-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap}
+    .section-copy{display:flex;flex-direction:column;gap:6px}
+    .section-kicker{font-size:.7rem;text-transform:uppercase;letter-spacing:3px;color:#4d4d4d;font-weight:700}
+    .section-name{font-size:1.25rem;font-weight:700}
+    .section-desc{font-size:.82rem;color:#626262;max-width:720px;line-height:1.6}
 
     /* SECTION */
     .section{display:flex;flex-direction:column;gap:10px}
@@ -110,6 +135,23 @@
     .toast.show{opacity:1}
 
     footer{text-align:center;padding:14px;font-size:.7rem;color:#1e1e1e;border-top:1px solid #111;flex-shrink:0}
+
+    @media (max-width: 1080px){
+      .admin-shell{grid-template-columns:1fr;padding:20px 18px 28px}
+      .side-nav{position:static}
+      .hero-grid,.quick-grid{grid-template-columns:1fr}
+    }
+
+    @media (max-width: 720px){
+      header{padding:14px 18px;align-items:flex-start;flex-direction:column;gap:12px}
+      .header-right{width:100%;justify-content:space-between}
+      .fgrid{grid-template-columns:1fr}
+      .settings-card{padding:18px 16px}
+      .tile-row{flex-wrap:wrap;align-items:flex-start}
+      .tile-name,.tile-url{max-width:none}
+      .tile-acts{width:100%;justify-content:flex-end}
+      .section-hero{padding:20px 18px}
+    }
   </style>
 </head>
 <body>
@@ -128,139 +170,231 @@
   </div>
 </header>
 
-<nav class="tabs">
-  <button class="tab-btn active" data-tab="kacheln">📋 Kacheln</button>
-  <button class="tab-btn" data-tab="einstellungen">⚙ Einstellungen</button>
-</nav>
-
-<!-- ── TAB: KACHELN ── -->
-<div id="tab-kacheln" class="tab-pane active">
-
-  <div class="section">
-    <div class="sec-hd">
-      <span class="sec-title">Feste Dashboards</span>
-      <div class="sec-line"></div>
-      <span class="sec-hint">URL, Icon und Farbe editierbar</span>
+<main class="admin-shell">
+  <aside class="side-nav" aria-label="Admin-Navigation">
+    <div class="nav-block">
+      <div class="nav-label">Navigation</div>
+      <button class="nav-btn active" data-section="overview">
+        <div class="nav-ic">◈</div>
+        <div><strong>Übersicht</strong><span>Schnelleinstieg und häufige Aufgaben</span></div>
+      </button>
+      <button class="nav-btn" data-section="dashboards">
+        <div class="nav-ic">📋</div>
+        <div><strong>Dashboards</strong><span>Feste und eigene Kacheln verwalten</span></div>
+      </button>
+      <button class="nav-btn" data-section="hub">
+        <div class="nav-ic">⚙</div>
+        <div><strong>Hub</strong><span>Titel, Reload und Bildschirmschoner</span></div>
+      </button>
     </div>
-    <div id="fixedList" class="tile-list"></div>
-  </div>
+    <div class="nav-block">
+      <div class="nav-label">Geräte</div>
+      <button class="nav-btn" data-section="connection">
+        <div class="nav-ic">🔌</div>
+        <div><strong>Verbindung</strong><span>ADB, Fire Stick und Kiosk-URL</span></div>
+      </button>
+      <button class="nav-btn" data-section="remote">
+        <div class="nav-ic">📺</div>
+        <div><strong>Fernsteuerung</strong><span>Fully, Screenshot und Fire-TV-Steuerung</span></div>
+      </button>
+    </div>
+    <div class="nav-block">
+      <div class="nav-label">System</div>
+      <button class="nav-btn" data-section="server">
+        <div class="nav-ic">🛠</div>
+        <div><strong>Server</strong><span>Neustart und Betriebsinfos</span></div>
+      </button>
+    </div>
+  </aside>
 
-  <div class="section">
-    <div class="sec-hd">
-      <span class="sec-title">Eigene Kacheln</span>
-      <div class="sec-line"></div>
-    </div>
-    <div id="customList" class="tile-list"></div>
-    <button class="btn-add" onclick="openNew()">＋ Neue Kachel hinzufügen</button>
-  </div>
-
-</div>
-
-<!-- ── TAB: EINSTELLUNGEN ── -->
-<div id="tab-einstellungen" class="tab-pane">
-
-  <div class="settings-card">
-    <h3>ADB &amp; Fire Stick</h3>
-    <div class="field">
-      <label>ADB-Pfad (nur ändern wenn nicht in Docker)</label>
-      <input type="text" id="s-adbpath" placeholder="adb &nbsp;← Standard im Docker-Container" />
-    </div>
-    <div class="field">
-      <label>Fire Stick IP-Adresse</label>
-      <input type="text" id="s-firestickip" placeholder="192.168.8.177" style="width:200px" />
-    </div>
-    <div class="save-row">
-      <button class="btn btn-primary" onclick="saveAdbSettings()">Speichern</button>
-      <button class="btn" onclick="testAdb()" style="background:#1a1a1a;border:1px solid #333;color:#aaa;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:.85rem;font-family:inherit">&#128279; Verbindung testen</button>
-      <span id="adb-test-status" style="font-size:.78rem;color:#555;margin-left:4px"></span>
-    </div>
-  </div>
-
-  <div class="settings-card">
-    <h3>Hub-Konfiguration</h3>
-    <div class="field">
-      <label>Hub-Titel (wird auf der Hauptseite angezeigt)</label>
-      <input type="text" id="s-title" placeholder="Löwen Dart – Kiosk Hub" />
-    </div>
-    <div class="field">
-      <label>Auto-Reload (Minuten, <code style="color:#f4a261">0</code> = deaktiviert)</label>
-      <input type="number" id="s-autoreload" min="0" max="60" step="1" placeholder="5" style="width:110px" />
-    </div>
-    <div class="field" style="border-top:1px solid #1e1e1e;padding-top:14px;margin-top:2px">
-      <label style="margin-bottom:10px">Bildschirmschoner</label>
-      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-        <label style="display:flex;align-items:center;gap:8px;font-size:.85rem;color:#aaa;cursor:pointer">
-          <input type="checkbox" id="s-ss-enabled" style="width:16px;height:16px;cursor:pointer" />
-          Aktiviert
-        </label>
-        <label style="display:flex;align-items:center;gap:8px;font-size:.85rem;color:#aaa">
-          Timeout:
-          <input type="number" id="s-ss-minutes" min="1" max="60" step="1" placeholder="2" style="width:80px" />
-          Minuten
-        </label>
+  <div class="content-area">
+    <section id="section-overview" class="content-section active">
+      <div class="section-hero">
+        <div class="hero-kicker">Kiosk-Konfiguration</div>
+        <div class="hero-title">Alle Einstellungen nach Aufgaben sortiert</div>
+        <div class="hero-copy">Die Oberfläche ist jetzt nach Arbeitsbereichen getrennt: Dashboards, Hub, Verbindung, Fernsteuerung und Server. So findest du Änderungen schneller und kannst typische Abläufe direkt aus der Übersicht starten.</div>
+        <div class="hero-grid">
+          <div class="hero-stat"><strong>Dashboards</strong><span>Feste Ziele anpassen und eigene Kacheln ergänzen.</span></div>
+          <div class="hero-stat"><strong>Verbindung</strong><span>ADB-Pfad, Fire-Stick-IP und Kiosk-Start-URL zentral pflegen.</span></div>
+          <div class="hero-stat"><strong>Fernsteuerung</strong><span>Fully starten, stoppen und Fire TV direkt per Screenshot bedienen.</span></div>
+        </div>
+        <div class="quick-grid">
+          <button class="quick-link" type="button" data-jump="dashboards"><strong>Kacheln anpassen</strong><span>Direkt zu festen und eigenen Dashboard-Kacheln wechseln.</span></button>
+          <button class="quick-link" type="button" data-jump="connection"><strong>Geräte verbinden</strong><span>Fire Stick und Kiosk-URL für Fully konfigurieren.</span></button>
+          <button class="quick-link" type="button" data-jump="remote"><strong>Fernsteuerung öffnen</strong><span>Screenshots aufnehmen und Fully neu laden oder starten.</span></button>
+        </div>
       </div>
-    </div>
-    <div class="save-row">
-      <button class="btn btn-primary" onclick="saveSettings()">Speichern</button>
-    </div>
-  </div>
+    </section>
 
-  <div class="settings-card">
-    <h3>Kiosk-Gerät (Fire Stick / Fully Kiosk Browser)</h3>
-    <p class="info-txt">Trag diese URL in <strong style="color:#aaa">Fully Kiosk Browser</strong> als <em>Start-URL</em> ein. PC und Fire Stick müssen im selben WLAN sein.</p>
-    <div class="field">
-      <label>Server-IP / Hostname <span id="detectedIpHint" style="color:#444;font-weight:400"></span></label>
-      <input type="text" id="s-serverip" placeholder="wird automatisch erkannt…" oninput="updateKioskUrl()" />
-    </div>
-    <div style="display:flex;gap:8px;align-items:stretch;margin-top:4px">
-      <div class="kiosk-box" id="kioskUrl" style="flex:1;cursor:default">http://…</div>
-      <button class="btn" onclick="copyKioskUrl()" title="URL kopieren" style="padding:0 14px;background:#1a1a1a;border:1px solid #333;border-radius:8px;color:#aaa;font-size:.85rem;cursor:pointer;white-space:nowrap">📋 Kopieren</button>
-    </div>
-    <div class="save-row">
-      <button class="btn btn-primary" onclick="saveKioskIp()">Speichern</button>
-    </div>
-  </div>
-
-  <div class="settings-card">
-    <h3>&#128246; Fire TV – Fernsteuerung</h3>
-    <p class="info-txt">Screenshot vom Fire TV aufnehmen &ndash; dann einfach auf den Button im Bild klicken um ihn zu best&auml;tigen.</p>
-    <div style="display:flex;flex-direction:column;gap:10px;margin-top:4px">
-
-      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-        <button class="btn btn-primary" onclick="takeScreenshot()" id="screenshotBtn">&#128247; Screenshot aufnehmen</button>
-        <button class="btn" onclick="adbKey(23)" style="background:#1a1a1a;border:1px solid #333;color:#ccc">&#9654; OK</button>
-        <button class="btn" onclick="adbKey(66)" style="background:#1a1a1a;border:1px solid #333;color:#ccc">&#9166; Enter</button>
-        <button class="btn" onclick="adbKey(4)"  style="background:#1a1a1a;border:1px solid #333;color:#ccc">&#8592; Zur&uuml;ck</button>
-        <span id="screenshotStatus" style="color:#666;font-size:.82rem"></span>
+    <section id="section-dashboards" class="content-section">
+      <div class="section-head">
+        <div class="section-copy">
+          <div class="section-kicker">Dashboards</div>
+          <div class="section-name">Kacheln und Ziele verwalten</div>
+          <div class="section-desc">Hier legst du fest, welche Dashboards im Kiosk erscheinen. Feste Einträge können angepasst werden, zusätzliche Ziele legst du als eigene Kacheln an.</div>
+        </div>
       </div>
 
-      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-        <button class="btn" onclick="fullyStop()" style="background:#c62828;color:#fff">&#9209; Fully beenden</button>
-        <button class="btn" onclick="fullyStart()" style="background:#2e7d32;color:#fff">&#9654; Fully starten</button>
-        <button class="btn" onclick="kioskReload()" style="background:#1565c0;color:#fff" title="Sendet die aktuelle Dashboard-URL an Fully Kiosk">&#128257; URL neu laden</button>
-        <span id="fullyStatus" style="color:#666;font-size:.82rem"></span>
+      <div class="section">
+        <div class="sec-hd">
+          <span class="sec-title">Feste Dashboards</span>
+          <div class="sec-line"></div>
+          <span class="sec-hint">URL, Icon und Farbe editierbar</span>
+        </div>
+        <div id="fixedList" class="tile-list"></div>
       </div>
 
-      <!-- Screenshot-Vorschau: Klick → ADB-Tap an exakter Stelle -->
-      <div id="screenshotWrap" style="display:none;position:relative;border:1px solid #333;border-radius:8px;overflow:hidden;cursor:crosshair;max-width:100%">
-        <img id="screenshotImg" src="" alt="Fire TV Screen" style="width:100%;display:block;user-select:none" onclick="onScreenshotClick(event, this)">
-        <div id="tapMarker" style="display:none;position:absolute;width:24px;height:24px;border-radius:50%;border:3px solid #FB542B;transform:translate(-50%,-50%);pointer-events:none"></div>
-        <div style="position:absolute;bottom:6px;right:8px;font-size:.72rem;color:#aaa;background:rgba(0,0,0,.6);padding:2px 6px;border-radius:4px;pointer-events:none">Auf Button klicken zum Tippen</div>
+      <div class="section">
+        <div class="sec-hd">
+          <span class="sec-title">Eigene Kacheln</span>
+          <div class="sec-line"></div>
+          <span class="sec-hint">Für externe Ziele oder zusätzliche lokale Panels</span>
+        </div>
+        <div id="customList" class="tile-list"></div>
+        <button class="btn-add" onclick="openNew()">＋ Neue Kachel hinzufügen</button>
       </div>
-      <span id="tapStatus" style="color:#666;font-size:.82rem"></span>
-    </div>
-  </div>
+    </section>
 
-  <div class="settings-card">
-    <h3>Server</h3>
-    <p class="info-txt">Startet den Node.js-Server neu (z.&nbsp;B. nach Konfigurations&auml;nderungen). Starte den Server &uuml;ber <code style="color:#aaa;background:#111;padding:1px 6px;border-radius:4px">start.bat</code> damit der Neustart funktioniert.</p>
-    <div class="save-row">
-      <button class="btn" id="restartBtn" onclick="restartServer()" style="background:#1a1a1a;border:1px solid #333;color:#e63946">&#9881; Server neu starten</button>
-      <span id="restartStatus" style="color:#666;font-size:.82rem"></span>
-    </div>
-  </div>
+    <section id="section-hub" class="content-section">
+      <div class="section-head">
+        <div class="section-copy">
+          <div class="section-kicker">Hub</div>
+          <div class="section-name">Startseite und Anzeigeverhalten</div>
+          <div class="section-desc">Diese Einstellungen steuern den Titel des Kiosk-Hubs, automatische Aktualisierung und den Bildschirmschoner.</div>
+        </div>
+      </div>
 
-</div>
+      <div class="settings-card">
+        <h3>Hub-Konfiguration</h3>
+        <div class="field">
+          <label>Hub-Titel (wird auf der Hauptseite angezeigt)</label>
+          <input type="text" id="s-title" placeholder="Löwen Dart – Kiosk Hub" />
+        </div>
+        <div class="field">
+          <label>Auto-Reload (Minuten, <code style="color:#f4a261">0</code> = deaktiviert)</label>
+          <input type="number" id="s-autoreload" min="0" max="60" step="1" placeholder="5" style="width:110px" />
+        </div>
+        <div class="field" style="border-top:1px solid #1e1e1e;padding-top:14px;margin-top:2px">
+          <label style="margin-bottom:10px">Bildschirmschoner</label>
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+            <label style="display:flex;align-items:center;gap:8px;font-size:.85rem;color:#aaa;cursor:pointer">
+              <input type="checkbox" id="s-ss-enabled" style="width:16px;height:16px;cursor:pointer" />
+              Aktiviert
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;font-size:.85rem;color:#aaa">
+              Timeout:
+              <input type="number" id="s-ss-minutes" min="1" max="60" step="1" placeholder="2" style="width:80px" />
+              Minuten
+            </label>
+          </div>
+        </div>
+        <div class="save-row">
+          <button class="btn btn-primary" onclick="saveSettings()">Speichern</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="section-connection" class="content-section">
+      <div class="section-head">
+        <div class="section-copy">
+          <div class="section-kicker">Verbindung</div>
+          <div class="section-name">ADB, Fire Stick und Kiosk-URL</div>
+          <div class="section-desc">Alles, was für die technische Verbindung zwischen Server, Fire Stick und Fully Kiosk gebraucht wird, findest du gesammelt an einer Stelle.</div>
+        </div>
+      </div>
+
+      <div class="settings-card">
+        <h3>ADB &amp; Fire Stick</h3>
+        <div class="field">
+          <label>ADB-Pfad (nur ändern wenn nicht in Docker)</label>
+          <input type="text" id="s-adbpath" placeholder="adb &nbsp;← Standard im Docker-Container" />
+        </div>
+        <div class="field">
+          <label>Fire Stick IP-Adresse</label>
+          <input type="text" id="s-firestickip" placeholder="192.168.8.177" style="width:200px" />
+        </div>
+        <div class="save-row">
+          <button class="btn btn-primary" onclick="saveAdbSettings()">Speichern</button>
+          <button class="btn" onclick="testAdb()" style="background:#1a1a1a;border:1px solid #333;color:#aaa;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:.85rem;font-family:inherit">&#128279; Verbindung testen</button>
+          <span id="adb-test-status" style="font-size:.78rem;color:#555;margin-left:4px"></span>
+        </div>
+      </div>
+
+      <div class="settings-card">
+        <h3>Kiosk-Gerät (Fire Stick / Fully Kiosk Browser)</h3>
+        <p class="info-txt">Trag diese URL in <strong style="color:#aaa">Fully Kiosk Browser</strong> als <em>Start-URL</em> ein. PC und Fire Stick müssen im selben WLAN sein.</p>
+        <div class="field">
+          <label>Server-IP / Hostname <span id="detectedIpHint" style="color:#444;font-weight:400"></span></label>
+          <input type="text" id="s-serverip" placeholder="wird automatisch erkannt…" oninput="updateKioskUrl()" />
+        </div>
+        <div style="display:flex;gap:8px;align-items:stretch;margin-top:4px;flex-wrap:wrap">
+          <div class="kiosk-box" id="kioskUrl" style="flex:1;cursor:default;min-width:260px">http://…</div>
+          <button class="btn" onclick="copyKioskUrl()" title="URL kopieren" style="padding:0 14px;background:#1a1a1a;border:1px solid #333;border-radius:8px;color:#aaa;font-size:.85rem;cursor:pointer;white-space:nowrap">📋 Kopieren</button>
+        </div>
+        <div class="save-row">
+          <button class="btn btn-primary" onclick="saveKioskIp()">Speichern</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="section-remote" class="content-section">
+      <div class="section-head">
+        <div class="section-copy">
+          <div class="section-kicker">Fernsteuerung</div>
+          <div class="section-name">Fire TV und Fully direkt bedienen</div>
+          <div class="section-desc">Für Wartung und Bedienung vom Sofa aus: Screenshot aufnehmen, Tasten senden und Fully neu starten oder aktualisieren.</div>
+        </div>
+      </div>
+
+      <div class="settings-card">
+        <h3>&#128246; Fire TV – Fernsteuerung</h3>
+        <p class="info-txt">Screenshot vom Fire TV aufnehmen &ndash; dann einfach auf den Button im Bild klicken um ihn zu bestätigen.</p>
+        <div style="display:flex;flex-direction:column;gap:10px;margin-top:4px">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <button class="btn btn-primary" onclick="takeScreenshot()" id="screenshotBtn">&#128247; Screenshot aufnehmen</button>
+            <button class="btn" onclick="adbKey(23)" style="background:#1a1a1a;border:1px solid #333;color:#ccc">&#9654; OK</button>
+            <button class="btn" onclick="adbKey(66)" style="background:#1a1a1a;border:1px solid #333;color:#ccc">&#9166; Enter</button>
+            <button class="btn" onclick="adbKey(4)" style="background:#1a1a1a;border:1px solid #333;color:#ccc">&#8592; Zur&uuml;ck</button>
+            <span id="screenshotStatus" style="color:#666;font-size:.82rem"></span>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <button class="btn" onclick="fullyStop()" style="background:#c62828;color:#fff">&#9209; Fully beenden</button>
+            <button class="btn" onclick="fullyStart()" style="background:#2e7d32;color:#fff">&#9654; Fully starten</button>
+            <button class="btn" onclick="kioskReload()" style="background:#1565c0;color:#fff" title="Sendet die aktuelle Dashboard-URL an Fully Kiosk">&#128257; URL neu laden</button>
+            <span id="fullyStatus" style="color:#666;font-size:.82rem"></span>
+          </div>
+
+          <div id="screenshotWrap" style="display:none;position:relative;border:1px solid #333;border-radius:8px;overflow:hidden;cursor:crosshair;max-width:100%">
+            <img id="screenshotImg" src="" alt="Fire TV Screen" style="width:100%;display:block;user-select:none" onclick="onScreenshotClick(event, this)">
+            <div id="tapMarker" style="display:none;position:absolute;width:24px;height:24px;border-radius:50%;border:3px solid #FB542B;transform:translate(-50%,-50%);pointer-events:none"></div>
+            <div style="position:absolute;bottom:6px;right:8px;font-size:.72rem;color:#aaa;background:rgba(0,0,0,.6);padding:2px 6px;border-radius:4px;pointer-events:none">Auf Button klicken zum Tippen</div>
+          </div>
+          <span id="tapStatus" style="color:#666;font-size:.82rem"></span>
+        </div>
+      </div>
+    </section>
+
+    <section id="section-server" class="content-section">
+      <div class="section-head">
+        <div class="section-copy">
+          <div class="section-kicker">Server</div>
+          <div class="section-name">Wartung und Neustart</div>
+          <div class="section-desc">Wenn Konfigurationen übernommen wurden oder der Dienst neu gestartet werden muss, findest du hier die Server-Aktionen.</div>
+        </div>
+      </div>
+
+      <div class="settings-card">
+        <h3>Server</h3>
+        <p class="info-txt">Startet den Node.js-Server neu (z.&nbsp;B. nach Konfigurations&auml;nderungen). Starte den Server &uuml;ber <code style="color:#aaa;background:#111;padding:1px 6px;border-radius:4px">start.bat</code> damit der Neustart funktioniert.</p>
+        <div class="save-row">
+          <button class="btn" id="restartBtn" onclick="restartServer()" style="background:#1a1a1a;border:1px solid #333;color:#e63946">&#9881; Server neu starten</button>
+          <span id="restartStatus" style="color:#666;font-size:.82rem"></span>
+        </div>
+      </div>
+    </section>
+  </div>
+</main>
 
 <!-- ── MODAL ── -->
 <div class="modal-overlay" id="modalOverlay">
@@ -339,7 +473,8 @@
   (async () => {
     await loadAll();
     await loadSettingsForm();
-    setupTabs();
+    setupNav();
+    selectSection('overview');
   })();
 
   // ── Data ──
@@ -386,17 +521,24 @@
       .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
-  // ── Tabs ──
-  function setupTabs() {
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const tab = btn.dataset.tab;
-        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-        document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
-        btn.classList.add('active');
-        document.getElementById('tab-' + tab).classList.add('active');
-      });
+  // ── Navigation ──
+  function setupNav() {
+    document.querySelectorAll('.nav-btn').forEach(btn => {
+      btn.addEventListener('click', () => selectSection(btn.dataset.section));
     });
+    document.querySelectorAll('[data-jump]').forEach(btn => {
+      btn.addEventListener('click', () => selectSection(btn.dataset.jump));
+    });
+  }
+
+  function selectSection(section) {
+    document.querySelectorAll('.nav-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.section === section);
+    });
+    document.querySelectorAll('.content-section').forEach(panel => {
+      panel.classList.toggle('active', panel.id === 'section-' + section);
+    });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   // ── Modal open ──
