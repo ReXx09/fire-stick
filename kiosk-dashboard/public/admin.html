@@ -168,6 +168,7 @@
   </div>
   <div class="header-right">
     <button class="btn-restart-hd" id="hdRestartBtn" onclick="restartServer()">&#9881; Server neu starten</button>
+    <button class="btn-restart-hd" onclick="logout()">Abmelden</button>
     <a href="/" class="back-link">&#8592; Zum Hub</a>
   </div>
 </header>
@@ -313,7 +314,7 @@
         </div>
         <div class="field">
           <label>Fire Stick IP-Adresse</label>
-          <input type="text" id="s-firestickip" placeholder="192.168.8.177" style="width:200px" />
+          <input type="text" id="s-firestickip" placeholder="Fire-Stick-IP" style="width:200px" />
         </div>
         <div class="save-row">
           <button class="btn btn-primary" onclick="saveAdbSettings()">Speichern</button>
@@ -594,19 +595,21 @@
     const row = document.createElement('div');
     row.className = 'tile-row';
     if (d.hidden) row.classList.add('is-hidden');
+    const color = /^#[0-9a-f]{6}$/i.test(d.color) ? d.color : '#6c757d';
     row.innerHTML =
-      '<span class="tile-dot" style="background:' + d.color + '"></span>' +
-      '<span class="tile-ic">' + (d.icon || '🔗') + '</span>' +
+      '<span class="tile-dot" style="background:' + color + '"></span>' +
+      '<span class="tile-ic"></span>' +
       '<span class="tile-name">' + esc(d.title) +
         (isFixed ? '<span class="fixed-tag">fest</span>' : '') + '</span>' +
       '<span class="tile-url" title="' + esc(d.route) + '">' + esc(d.route) + '</span>' +
-      '<span class="tile-bdg" style="background:' + d.color + '22;color:' + d.color + '">' + esc(d.hidden ? 'Ausgeblendet' : (d.badge || '')) + '</span>' +
+      '<span class="tile-bdg" style="background:' + color + '22;color:' + color + '">' + esc(d.hidden ? 'Ausgeblendet' : (d.badge || '')) + '</span>' +
       '<div class="tile-acts">' +
-        '<button class="btn btn-edit2" onclick="openEdit(\'' + d.id + '\',' + isFixed + ')">✏ Bearbeiten</button>' +
-        (isFixed
-          ? '<button class="btn btn-del2" onclick="toggleFixedTile(\'' + d.id + '\',' + (!d.hidden) + ')">' + (d.hidden ? '↺ Einblenden' : '✕ Ausblenden') + '</button>'
-          : '<button class="btn btn-del2" onclick="deleteTile(\'' + d.id + '\')">✕ Löschen</button>') +
+        '<button class="btn btn-edit2">✏ Bearbeiten</button>' +
+        '<button class="btn btn-del2">' + (isFixed ? (d.hidden ? '↺ Einblenden' : '✕ Ausblenden') : '✕ Löschen') + '</button>' +
       '</div>';
+    row.querySelector('.tile-ic').textContent = d.icon || '🔗';
+    row.querySelector('.btn-edit2').addEventListener('click', () => openEdit(d.id, isFixed));
+    row.querySelector('.btn-del2').addEventListener('click', () => isFixed ? toggleFixedTile(d.id, !d.hidden) : deleteTile(d.id));
     return row;
   }
 
@@ -614,6 +617,12 @@
     return String(s)
       .replace(/&/g,'&amp;').replace(/</g,'&lt;')
       .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  async function logout() {
+    const response = await fetch('/api/logout', { method: 'POST' });
+    if (!response.ok) { alert('Abmeldung fehlgeschlagen.'); return; }
+    location.href = '/';
   }
 
   // ── Navigation ──
@@ -891,11 +900,7 @@
   async function saveAdbSettings() {
     const adbPath     = document.getElementById('s-adbpath').value.trim();
     const firestickIp = document.getElementById('s-firestickip').value.trim();
-    await fetch('/api/settings', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ adbPath, firestickIp })
-    });
+    if (!await putSettings({ adbPath, firestickIp })) return;
     showToast('ADB-Einstellungen gespeichert ✓');
   }
 
@@ -935,11 +940,7 @@
 
   async function saveRemoteKeymap() {
     const nextMap = readRemoteKeymapFromForm();
-    await fetch('/api/settings', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ remoteKeymap: nextMap })
-    });
+    if (!await putSettings({ remoteKeymap: nextMap })) return;
     remoteKeymap = nextMap;
     showToast('Tastenbelegung gespeichert ✓');
   }
@@ -951,11 +952,7 @@
 
   async function saveKioskIp() {
     const serverIp = document.getElementById('s-serverip').value.trim();
-    await fetch('/api/settings', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ serverIp })
-    });
+    if (!await putSettings({ serverIp })) return;
     showToast('Server-IP gespeichert ✓');
   }
 
@@ -1098,7 +1095,8 @@
     if (hdBtn) hdBtn.disabled = true;
     if (status) status.textContent = 'Neustart wird angefordert...';
     try {
-      await fetch('/api/restart', { method: 'POST' });
+      const response = await fetch('/api/restart', { method: 'POST' });
+      if (!response.ok) throw new Error('HTTP ' + response.status);
       if (status) { status.style.color = '#4caf50'; status.textContent = 'Server startet neu – Seite wird in 4 Sekunden neu geladen.'; }
       setTimeout(() => location.reload(), 4000);
     } catch {
@@ -1113,12 +1111,23 @@
     const autoReloadMinutes = Math.max(0, parseInt(document.getElementById('s-autoreload').value, 10) || 0);
     const screensaverEnabled = document.getElementById('s-ss-enabled').checked;
     const screensaverMinutes = Math.max(1, parseInt(document.getElementById('s-ss-minutes').value, 10) || 2);
-    await fetch('/api/settings', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ hubTitle, autoReloadMinutes, screensaverEnabled, screensaverMinutes })
-    });
+    if (!await putSettings({ hubTitle, autoReloadMinutes, screensaverEnabled, screensaverMinutes })) return;
     showToast('Einstellungen gespeichert ✓');
+  }
+
+  async function putSettings(settings) {
+    try {
+      const response = await fetch('/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settings)
+      });
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+      return true;
+    } catch (error) {
+      alert('Einstellungen konnten nicht gespeichert werden: ' + error.message);
+      return false;
+    }
   }
 
   // ── Toast ──

@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Admin-Anmeldung</title>
+  <style>
+    body { background:#0a0a0a; color:#f1f1f1; font-family:system-ui,sans-serif; display:grid; place-items:center; min-height:100vh; margin:0; }
+    form { background:#161616; border:1px solid #333; border-radius:12px; padding:24px; width:min(340px,80vw); }
+    label, input, button { display:block; width:100%; box-sizing:border-box; margin-top:12px; }
+    input, button { padding:10px; font:inherit; }
+    button { background:#e63946; color:white; border:0; cursor:pointer; }
+    #error { color:#ff8585; }
+    a { color:#ccc; }
+  </style>
+</head>
+<body>
+  <form id="login">
+    <h1>Admin-Anmeldung</h1>
+    <label for="password">Admin-Passwort</label>
+    <input id="password" type="password" autocomplete="current-password" required autofocus>
+    <button type="submit">Anmelden</button>
+    <p id="error" role="alert"></p>
+    <a href="/">Zum Kiosk-Hub</a>
+  </form>
+  <script>
+    document.getElementById('login').addEventListener('submit', async event => {
+      event.preventDefault();
+      const error = document.getElementById('error');
+      try {
+        const response = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: document.getElementById('password').value })
+        });
+        const result = await response.json();
+        if (!response.ok) { error.textContent = result.error; return; }
+        const next = new URLSearchParams(location.search).get('next');
+        location.href = ['/panels/brave.html', '/panels/spieler.html'].includes(next) ? next : '/admin.html';
+      } catch {
+        error.textContent = 'Server nicht erreichbar.';
+      }
+    });
+  </script>
+</body>
+</html>

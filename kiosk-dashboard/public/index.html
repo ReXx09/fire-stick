@@ -203,19 +203,31 @@
     updateClock();setInterval(updateClock,1000);
     function makeCard(d,isCustom){
       const card=document.createElement('a');
-      card.href=d.route;
+      try {
+        const url=new URL(d.route,location.href);
+        if(!['http:','https:'].includes(url.protocol))throw new Error('Ungueltige URL');
+        card.href=url.href;
+      } catch(error) {
+        console.error('Kachel-URL ungueltig:',error);
+        card.href='#';
+      }
       if(d.external){card.target='_blank';card.rel='noopener noreferrer';}
       card.className='card'+(isCustom?' custom-card':'');
-      card.style.setProperty('--accent',d.color);
-      card.style.borderColor=d.color+'44';
+      const color=/^#[0-9a-f]{6}$/i.test(d.color)?d.color:'#6c757d';
+      card.style.setProperty('--accent',color);
+      card.style.borderColor=color+'44';
       card.innerHTML=(isCustom?'<button class="delete-btn" title="Löschen">✕</button>':'')+
-        '<span class="icon">'+(d.icon||'🔗')+'</span>'+
-        '<h2>'+d.title+'</h2>'+
-        '<p>'+(d.description||'')+'</p>'+
+        '<span class="icon"></span><h2></h2><p></p>'+
         '<div class="card-footer">'+
-          '<span class="badge" style="background:'+d.color+'22;color:'+d.color+'">'+(d.badge||'Custom')+'</span>'+
+          '<span class="badge"></span>'+
           '<span class="card-arrow">→</span>'+
         '</div>';
+      card.querySelector('.icon').textContent=d.icon||'🔗';
+      card.querySelector('h2').textContent=d.title;
+      card.querySelector('p').textContent=d.description||'';
+      const badge=card.querySelector('.badge');
+      badge.textContent=d.badge||'Custom';
+      badge.style.background=color+'22';badge.style.color=color;
       if(isCustom){
         card.querySelector('.delete-btn').addEventListener('click',async(e)=>{
           e.preventDefault();e.stopPropagation();
@@ -229,10 +241,38 @@
     async function loadFixed(){const l=await fetch('/api/dashboards/fixed').then(r=>r.json());const g=document.getElementById('fixedGrid');l.forEach(d=>g.appendChild(makeCard(d,false)));}
     async function loadCustom(){const l=await fetch('/api/dashboards/custom').then(r=>r.json());const a=document.getElementById('addCard');l.forEach(d=>document.getElementById('customGrid').insertBefore(makeCard(d,true),a));}
     loadFixed();loadCustom();
+    const DEFAULT_REMOTE_KEYMAP={
+      hub:{
+        back:'close_modal_or_back',
+        menu:'open_admin',
+        playpause:'reload_hub'
+      },
+      admin:{
+        back:'close_modal_or_hub',
+        menu:'open_quick_actions',
+        playpause:'refresh_admin'
+      }
+    };
+
+    function normalizeRemoteKeymap(raw){
+      const map=raw&&typeof raw==='object'?raw:{};
+      const hub=map.hub&&typeof map.hub==='object'?map.hub:{};
+      return {
+        hub:{
+          back:typeof hub.back==='string'?hub.back:DEFAULT_REMOTE_KEYMAP.hub.back,
+          menu:typeof hub.menu==='string'?hub.menu:DEFAULT_REMOTE_KEYMAP.hub.menu,
+          playpause:typeof hub.playpause==='string'?hub.playpause:DEFAULT_REMOTE_KEYMAP.hub.playpause
+        }
+      };
+    }
+
+    let remoteKeymap=normalizeRemoteKeymap(null);
+
     fetch('/api/settings').then(r=>r.json()).then(s=>{
       if(s&&s.hubTitle){document.querySelector('header h1').textContent=s.hubTitle;document.title=s.hubTitle;}
       setupAutoReload(s.autoReloadMinutes!==undefined?s.autoReloadMinutes:5);
       window._initScreensaver(s.screensaverEnabled!==false, s.screensaverMinutes||2);
+      remoteKeymap=normalizeRemoteKeymap(s&&s.remoteKeymap);
     });
     let _reloadTimer=null,_reloadSecs=0;
     function setupAutoReload(minutes){
@@ -290,39 +330,44 @@
       return null;
     }
 
+    function executeHubRemoteAction(mapping,modalOpen,typing){
+      if(!mapping||mapping==='none')return false;
+
+      if(mapping==='close_modal_or_back'){
+        if(modalOpen){
+          closeModal();
+          return true;
+        }
+        if(typing)return false;
+        if(window.history.length>1){
+          window.history.back();
+          return true;
+        }
+        return false;
+      }
+
+      if(typing)return false;
+
+      if(mapping==='open_admin'){
+        window.location.href='/admin.html';
+        return true;
+      }
+      if(mapping==='reload_hub'){
+        manualReload();
+        return true;
+      }
+      return false;
+    }
+
     document.addEventListener('keydown',function(e){
       const action=getRemoteAction(e);
       if(!action)return;
 
       const modalOpen=document.getElementById('modalOverlay').classList.contains('open');
       const typing=isTypingTarget(e.target);
-
-      if(action==='back'){
-        if(modalOpen){
-          e.preventDefault();
-          closeModal();
-          return;
-        }
-        if(typing)return;
-        if(window.history.length>1){
-          e.preventDefault();
-          window.history.back();
-        }
-        return;
-      }
-
-      if(typing)return;
-
-      if(action==='playpause'){
-        e.preventDefault();
-        manualReload();
-        return;
-      }
-
-      if(action==='menu'){
-        e.preventDefault();
-        window.location.href='/admin.html';
-      }
+      const mapping=remoteKeymap.hub[action];
+      const handled=executeHubRemoteAction(mapping,modalOpen,typing);
+      if(handled)e.preventDefault();
     });
 
     async function saveCard(){

@@ -2,9 +2,10 @@
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
-const http = require('http');
-const https = require('https');
-const { exec, spawn } = require('child_process');
+const crypto = require('crypto');
+const { Readable, Transform } = require('stream');
+const { pipeline } = require('stream/promises');
+const { execFile } = require('child_process');
 
 // SSE-Clients – alle offenen Dashboards sofort benachrichtigen
 const sseClients = new Set();
@@ -24,9 +25,11 @@ function getLocalIP() {
 }
 
 const app = express();
+if (process.env.KIOSK_TRUST_PROXY) app.set('trust proxy', process.env.KIOSK_TRUST_PROXY);
 const PORT = process.env.PORT || 3000;
 const PUBLIC_PORT = process.env.PUBLIC_PORT || PORT;
 const FIRE_FEATURES_ENABLED = String(process.env.FIRE_FEATURES_ENABLED || 'true').toLowerCase() === 'true';
+const ADMIN_PASSWORD = process.env.KIOSK_ADMIN_PASSWORD || '';
 const DART_DASHBOARD_PORT = process.env.DART_DASHBOARD_PORT || '3000';
 const DART_DASHBOARD_URL = process.env.DART_DASHBOARD_URL || `http://${process.env.SERVER_IP || getLocalIP()}:${DART_DASHBOARD_PORT}`;
 
@@ -54,6 +57,78 @@ const ADB_DEFAULT = process.env.ADB_PATH || (
 );
 const BRAVE_PKG   = 'com.brave.browser';
 
+app.use(express.json({ limit: '32kb' }));
+
+const sessions = new Map();
+const loginAttempts = new Map();
+const sessionLifetime = 12 * 60 * 60 * 1000;
+const sessionCookie = 'kiosk_session';
+
+function isAuthenticated(req) {
+  const cookies = String(req.headers.cookie || '').split(';');
+  const cookie = cookies.map(value => value.trim()).find(value => value.startsWith(sessionCookie + '='));
+  const token = cookie ? cookie.slice(sessionCookie.length + 1) : '';
+  const expires = sessions.get(token);
+  if (!expires) return false;
+  if (expires <= Date.now()) {
+    sessions.delete(token);
+    return false;
+  }
+  return true;
+}
+
+app.use((req, res, next) => {
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
+    const origin = req.get('Origin');
+    if (req.get('Sec-Fetch-Site') === 'cross-site' || (origin && origin !== `${req.protocol}://${req.get('host')}`)) {
+      return res.status(403).json({ error: 'Ungueltige Anfragequelle' });
+    }
+  }
+  next();
+});
+
+app.post('/api/login', (req, res) => {
+  if (!ADMIN_PASSWORD) return res.status(503).json({ error: 'KIOSK_ADMIN_PASSWORD ist nicht konfiguriert.' });
+  const now = Date.now();
+  for (const [ip, attempt] of loginAttempts) if (attempt.until <= now) loginAttempts.delete(ip);
+  const attempt = loginAttempts.get(req.ip);
+  if (attempt && attempt.count >= 10) return res.status(429).json({ error: 'Zu viele Anmeldeversuche. Bitte spaeter erneut versuchen.' });
+  const password = typeof req.body?.password === 'string' ? req.body.password : '';
+  const actual = crypto.createHash('sha256').update(password).digest();
+  const expected = crypto.createHash('sha256').update(ADMIN_PASSWORD).digest();
+  if (!crypto.timingSafeEqual(actual, expected)) {
+    loginAttempts.set(req.ip, { count: (attempt?.count || 0) + 1, until: attempt?.until || now + 15 * 60 * 1000 });
+    return res.status(401).json({ error: 'Passwort falsch.' });
+  }
+  loginAttempts.delete(req.ip);
+  for (const [token, expires] of sessions) if (expires <= now) sessions.delete(token);
+  const token = crypto.randomBytes(32).toString('hex');
+  sessions.set(token, now + sessionLifetime);
+  res.cookie(sessionCookie, token, { httpOnly: true, sameSite: 'strict', secure: req.secure, maxAge: sessionLifetime, path: '/' });
+  res.json({ ok: true });
+});
+
+app.post('/api/logout', (req, res) => {
+  const cookie = String(req.headers.cookie || '').split(';').map(value => value.trim()).find(value => value.startsWith(sessionCookie + '='));
+  if (cookie) sessions.delete(cookie.slice(sessionCookie.length + 1));
+  res.clearCookie(sessionCookie, { path: '/' });
+  res.json({ ok: true });
+});
+
+app.use((req, res, next) => {
+  let page;
+  try { page = path.posix.normalize(decodeURIComponent(req.path).replace(/\\/g, '/').toLowerCase()); }
+  catch { return res.status(400).send('Ungueltiger Pfad'); }
+  const publicApi = req.method === 'GET' && ['/api/dashboards/fixed', '/api/dashboards/custom', '/api/settings', '/api/events'].includes(page);
+  if ((page === '/api' || page.startsWith('/api/')) && !publicApi && !isAuthenticated(req)) {
+    return res.status(401).json({ error: 'Admin-Anmeldung erforderlich.' });
+  }
+  if (['/admin.html', '/panels/brave.html', '/panels/spieler.html'].includes(page) && !isAuthenticated(req)) {
+    return res.redirect('/login.html?next=' + encodeURIComponent(page));
+  }
+  next();
+});
+
 app.use(express.static(path.join(__dirname, 'public'), {
   setHeaders(res, filePath) {
     if (filePath.endsWith('.html')) {
@@ -61,19 +136,17 @@ app.use(express.static(path.join(__dirname, 'public'), {
     }
   }
 }));
-app.use(express.json());
 
 const fixedDefaults = [
-  { id: 'grafana',        title: 'Grafana',         icon: '📊', description: 'Metriken, Graphen & Monitoring',               color: '#f46800', route: 'http://localhost:3001',                                                          external: true,  badge: 'Monitoring' },
-  { id: 'dart-dashboard', title: 'Dart Dashboard',  icon: '🎯', description: 'Externes Hauptdashboard aus separatem Repository', color: '#e63946', route: DART_DASHBOARD_URL,                                                        external: true,  badge: 'Extern'     },
-  { id: 'wm2026',         title: 'WM 2026',          icon: '🌍', description: 'FIFA Weltmeisterschaft 2026 – Spielplan',       color: '#2a9d8f', route: '/panels/wm2026/index.html',                                                      external: false, badge: 'Lokal'      },
-  { id: 'privat-dart',    title: 'Privat Dart',      icon: '🎯', description: 'Vereinsinterne Dart-Liga & Turniere',           color: '#e63946', route: '/panels/privat-dart.html',                                                       external: false, badge: 'Lokal'      },
-  { id: 'live-spielstand',title: 'Live-Spielstand',  icon: '⚡', description: 'Aktueller Spielstand in Echtzeit',              color: '#f4a261', route: '/panels/live-spielstand.html',                                                   external: false, badge: 'Live'       },
-  { id: 'brave',          title: 'Browser',          icon: '\uD83E\uDD81', description: 'YouTube & Web-Inhalte \xFCber Brave Browser',        color: '#FB542B', route: '/panels/brave.html',                                                             external: false, badge: 'Brave'      }
+  { id: 'dart-dashboard', title: 'Dart Dashboard',  icon: '🎯', description: 'Haupt-Dashboard fuer Dart und Statistiken',      color: '#e63946', route: DART_DASHBOARD_URL,                         external: true,  badge: 'Extern'     },
+  { id: 'grafana',        title: 'Grafana',         icon: '📊', description: 'Metriken, Graphen & Monitoring',                color: '#f46800', route: 'http://localhost:3001',                   external: true,  badge: 'Monitoring' },
+  { id: 'wm2026',         title: 'WM 2026',         icon: '🌍', description: 'FIFA Weltmeisterschaft 2026 – Spielplan',      color: '#2a9d8f', route: '/panels/wm2026/index.html',               external: false, badge: 'Lokal'      },
+  { id: 'brave',          title: 'Browser',         icon: '\uD83E\uDD81', description: 'YouTube & Web-Inhalte ueber Brave Browser', color: '#FB542B', route: '/panels/brave.html',               external: false, badge: 'Brave'      }
 ];
 
 function readJson(file, fallback) {
-  try { if (fs.existsSync(file)) return JSON.parse(fs.readFileSync(file, 'utf8')); } catch {}
+  try { if (fs.existsSync(file)) return JSON.parse(fs.readFileSync(file, 'utf8')); }
+  catch (error) { console.error('[Daten] Lesen fehlgeschlagen:', file, error.message); }
   return fallback;
 }
 function writeJson(file, data) {
@@ -83,22 +156,37 @@ function writeJson(file, data) {
 
 function getFixed(includeHidden = false) {
   const ov = readJson(OVERRIDES_FILE, {});
-  const list = fixedDefaults.map(d => ({ ...d, ...(ov[d.id] || {}) }));
+  const existing = fs.existsSync(OVERRIDES_FILE);
+  const list = fixedDefaults.map(d => ({ ...d, hidden: !existing, ...(ov[d.id] || {}) }));
   return includeHidden ? list : list.filter(d => !d.hidden);
 }
 function getCustom()   { return readJson(CUSTOM_FILE, []); }
 function saveCustom(l) { writeJson(CUSTOM_FILE, l); }
 function getSettings() {
-  return {
+  const settings = {
     hubTitle: 'Löwen Dart – Kiosk Hub',
     autoReloadMinutes: 5,
     screensaverEnabled: true,
     screensaverMinutes: 2,
+    remoteKeymap: {
+      hub: {
+        back: 'close_modal_or_back',
+        menu: 'open_admin',
+        playpause: 'reload_hub'
+      },
+      admin: {
+        back: 'close_modal_or_hub',
+        menu: 'open_quick_actions',
+        playpause: 'refresh_admin'
+      }
+    },
     fireFeaturesEnabled: FIRE_FEATURES_ENABLED,
     adbPath: process.env.ADB_PATH || ADB_DEFAULT,
-    firestickIp: process.env.FIRESTICK_IP || '192.168.8.177',
+    firestickIp: process.env.FIRESTICK_IP || '',
     ...readJson(SETTINGS_FILE, {})
   };
+  if (process.platform !== 'win32' && /^[a-z]:\\/i.test(settings.adbPath)) settings.adbPath = ADB_DEFAULT;
+  return settings;
 }
 function saveSettings(s){ writeJson(SETTINGS_FILE, s); }
 
@@ -109,15 +197,32 @@ function getPlayers() {
 }
 function savePlayers(list) { writeJson(PLAYERS_FILE, list); }
 
+function validPanelFields(fields) {
+  if (!fields || typeof fields !== 'object' || Array.isArray(fields)) return false;
+  if (Object.keys(fields).some(key => !['title', 'icon', 'description', 'badge', 'color', 'route', 'external', 'hidden'].includes(key))) return false;
+  for (const key of ['title', 'icon', 'description', 'badge']) {
+    if (fields[key] !== undefined && (typeof fields[key] !== 'string' || fields[key].length > 500)) return false;
+  }
+  if (fields.color !== undefined && (typeof fields.color !== 'string' || !/^#[0-9a-f]{6}$/i.test(fields.color))) return false;
+  if (fields.route !== undefined && (typeof fields.route !== 'string' ||
+      !(validHttpUrl(fields.route) || (/^\/(?!\/)/.test(fields.route) && !/[\u0000-\u0020\\]/.test(fields.route))))) return false;
+  for (const key of ['external', 'hidden']) if (fields[key] !== undefined && typeof fields[key] !== 'boolean') return false;
+  return true;
+}
+
 // ── Fixed tiles ──
 app.get('/api/dashboards/fixed', (req, res) => {
   const includeHidden = String(req.query.includeHidden || 'false').toLowerCase() === 'true';
+  if (includeHidden && !isAuthenticated(req)) return res.status(401).json({ error: 'Admin-Anmeldung erforderlich.' });
   res.json(getFixed(includeHidden));
 });
 app.put('/api/dashboards/fixed/:id', (req, res) => {
   const def = fixedDefaults.find(d => d.id === req.params.id);
   if (!def) return res.status(404).json({ error: 'Nicht gefunden' });
-  const ov = readJson(OVERRIDES_FILE, {});
+  if (!validPanelFields(req.body)) return res.status(400).json({ error: 'Ungueltige Kacheldaten' });
+  const ov = fs.existsSync(OVERRIDES_FILE)
+    ? readJson(OVERRIDES_FILE, {})
+    : Object.fromEntries(fixedDefaults.map(tile => [tile.id, { hidden: true }]));
   ov[req.params.id] = { ...(ov[req.params.id] || {}), ...req.body };
   writeJson(OVERRIDES_FILE, ov);
   broadcastReload();
@@ -127,8 +232,8 @@ app.put('/api/dashboards/fixed/:id', (req, res) => {
 // ── Custom tiles ──
 app.get('/api/dashboards/custom', (req, res) => res.json(getCustom()));
 app.post('/api/dashboards/custom', (req, res) => {
-  const { title, icon, description, color, route, external, badge } = req.body;
-  if (!title || !route) return res.status(400).json({ error: 'title und route erforderlich' });
+  const { title, icon, description, color, route, external, badge } = req.body || {};
+  if (!title || !route || !validPanelFields(req.body)) return res.status(400).json({ error: 'Ungueltige Kacheldaten' });
   const list = getCustom();
   const entry = { id: 'custom-' + Date.now(), title, icon: icon || '🔗', description: description || '', color: color || '#6c757d', route, external: !!external, badge: badge || 'Custom' };
   list.push(entry);
@@ -137,6 +242,7 @@ app.post('/api/dashboards/custom', (req, res) => {
   res.status(201).json(entry);
 });
 app.put('/api/dashboards/custom/:id', (req, res) => {
+  if (!validPanelFields(req.body)) return res.status(400).json({ error: 'Ungueltige Kacheldaten' });
   const list = getCustom();
   const i = list.findIndex(d => d.id === req.params.id);
   if (i === -1) return res.status(404).json({ error: 'Nicht gefunden' });
@@ -173,8 +279,19 @@ app.get('/api/server-info', (req, res) => {
 });
 
 // ── Settings ──
-app.get('/api/settings', (req, res) => res.json(getSettings()));
+app.get('/api/settings', (req, res) => {
+  const settings = getSettings();
+  if (isAuthenticated(req)) return res.json(settings);
+  const { hubTitle, autoReloadMinutes, screensaverEnabled, screensaverMinutes, remoteKeymap } = settings;
+  res.json({ hubTitle, autoReloadMinutes, screensaverEnabled, screensaverMinutes, remoteKeymap });
+});
 app.put('/api/settings', (req, res) => {
+  if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body) ||
+      (req.body.adbPath !== undefined && typeof req.body.adbPath !== 'string') ||
+      (req.body.firestickIp !== undefined && (typeof req.body.firestickIp !== 'string' || (req.body.firestickIp && !/^[a-z0-9._-]+$/i.test(req.body.firestickIp)))) ||
+      (req.body.serverIp !== undefined && (typeof req.body.serverIp !== 'string' || (req.body.serverIp && !/^[a-z0-9._-]+$/i.test(req.body.serverIp))))) {
+    return res.status(400).json({ error: 'Ungueltige Einstellungen' });
+  }
   const s = { ...getSettings(), ...req.body };
   saveSettings(s);
   broadcastReload();
@@ -201,58 +318,69 @@ function getMediaTiles()  { return fs.existsSync(BRAVE_MEDIA_FILE) ? readJson(BR
 function saveMediaTiles(l){ writeJson(BRAVE_MEDIA_FILE, l); }
 
 app.post('/api/adb/launch', (req, res) => {
-  const { url } = req.body;
-  if (!url || !/^https?:\/\//i.test(url))
+  const { url } = req.body || {};
+  if (!validHttpUrl(url))
     return res.status(400).json({ error: 'Ungültige URL' });
-  const s = getSettings();
-  const adbPath = `"${(s.adbPath || ADB_DEFAULT).replace(/"/g, '')}"`;
-  const device  = `${s.firestickIp || '192.168.8.177'}:5555`;
-  const cmd = `${adbPath} -s ${device} shell am start -a android.intent.action.VIEW -d "${url}" ${BRAVE_PKG}`;
-  exec(cmd, { timeout: 8000 }, (err, stdout, stderr) => {
+  runAdb(['shell', 'am', 'start', '-a', 'android.intent.action.VIEW', '-d', shellQuote(url), BRAVE_PKG], (err, stdout, stderr) => {
     if (err) return res.status(500).json({ error: (stderr || err.message).trim() });
+    if (/(^|\n)\s*(Error|Exception):/i.test(stdout)) return res.status(500).json({ error: stdout.trim() });
     res.json({ ok: true, output: stdout.trim() });
   });
 });
 
-app.post('/api/adb/install', (req, res) => {
-  const { apkPath } = req.body;
-  if (!apkPath) return res.status(400).json({ error: 'URL oder Pfad fehlt' });
-  const s = getSettings();
-  const adbBin = `"${(s.adbPath || ADB_DEFAULT).replace(/"/g, '')}"` ;
-  const device = `${s.firestickIp || '192.168.8.177'}:5555`;
+function validHttpUrl(value) {
+  if (typeof value !== 'string' || /[\u0000-\u001f\u007f]/.test(value)) return false;
+  try { return ['http:', 'https:'].includes(new URL(value).protocol); } catch { return false; }
+}
+function shellQuote(value) { return "'" + value.replace(/'/g, "'\\''") + "'"; }
+function runAdb(args, callback, timeout = 15000) {
+  const settings = getSettings();
+  const device = String(settings.firestickIp || '');
+  if (!/^[a-z0-9._-]+$/i.test(device)) return callback(new Error('Ungueltige Fire-Stick-Adresse'), '', '');
+  execFile(settings.adbPath || ADB_DEFAULT, ['-s', device + ':5555', ...args], { timeout }, callback);
+}
 
-  const doInstall = (localPath, cleanup) => {
-    exec(`${adbBin} -s ${device} install -r "${localPath}"`, { timeout: 120000 }, (err, stdout, stderr) => {
-      if (cleanup) fs.unlink(localPath, () => {});
-      if (err) return res.status(500).json({ error: (stderr || err.message).trim() });
-      res.json({ ok: true, output: stdout.trim() });
+app.post('/api/adb/install', async (req, res) => {
+  const { apkPath } = req.body || {};
+  if (typeof apkPath !== 'string' || !apkPath) return res.status(400).json({ error: 'URL oder Pfad fehlt' });
+  let localPath = apkPath;
+  let tempFile = '';
+  try {
+    if (/^https?:\/\//i.test(apkPath)) {
+      if (!validHttpUrl(apkPath)) return res.status(400).json({ error: 'Ungueltige Download-URL' });
+      const response = await fetch(apkPath, { signal: AbortSignal.timeout(120000) });
+      if (!response.ok || !response.body) throw new Error('Download fehlgeschlagen: HTTP ' + response.status);
+      tempFile = path.join(os.tmpdir(), 'apk-install-' + crypto.randomBytes(16).toString('hex') + '.apk');
+      let total = 0;
+      const limit = 200 * 1024 * 1024;
+      const counter = new Transform({ transform(chunk, _encoding, callback) {
+        total += chunk.length;
+        callback(total > limit ? new Error('APK ist groesser als 200 MB') : null, chunk);
+      } });
+      await pipeline(Readable.fromWeb(response.body), counter, fs.createWriteStream(tempFile, { flags: 'wx' }));
+      localPath = tempFile;
+    } else if (!apkPath.toLowerCase().endsWith('.apk')) {
+      return res.status(400).json({ error: 'Kein gültiger APK-Pfad' });
+    }
+    await new Promise((resolve, reject) => runAdb(['install', '-r', localPath], (err, stdout, stderr) => {
+      if (err) return reject(new Error((stderr || err.message).trim()));
+      if (!/(^|\n)\s*Success\s*($|\n)/i.test(stdout)) return reject(new Error((stdout || stderr || 'ADB meldet keine erfolgreiche Installation').trim()));
+      resolve(stdout);
+    }, 120000));
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  } finally {
+    if (tempFile) fs.promises.unlink(tempFile).catch(error => {
+      if (error.code !== 'ENOENT') console.error('[APK] Temporaere Datei konnte nicht entfernt werden:', error.message);
     });
-  };
-
-  if (/^https?:\/\//i.test(apkPath)) {
-    // URL → APK in temporäre Datei herunterladen, dann installieren
-    const tmpFile = path.join(os.tmpdir(), 'apk-install-' + Date.now() + '.apk');
-    const proto = apkPath.startsWith('https') ? https : http;
-    proto.get(apkPath, (response) => {
-      if (response.statusCode !== 200) {
-        return res.status(500).json({ error: 'Download fehlgeschlagen: HTTP ' + response.statusCode });
-      }
-      const file = fs.createWriteStream(tmpFile);
-      response.pipe(file);
-      file.on('finish', () => file.close(() => doInstall(tmpFile, true)));
-      file.on('error', (e) => { fs.unlink(tmpFile, () => {}); res.status(500).json({ error: e.message }); });
-    }).on('error', (e) => res.status(500).json({ error: 'Download-Fehler: ' + e.message }));
-  } else {
-    // Lokaler Pfad im Container (nur für Entwicklung)
-    if (!apkPath.endsWith('.apk')) return res.status(400).json({ error: 'Kein gültiger APK-Pfad' });
-    doInstall(apkPath, false);
   }
 });
 
 app.get('/api/brave-urls', (_req, res) => res.json(getBraveUrls()));
 app.post('/api/brave-urls', (req, res) => {
-  const { title, url, icon } = req.body;
-  if (!title || !url || !/^https?:\/\//i.test(url))
+  const { title, url, icon } = req.body || {};
+  if (typeof title !== 'string' || !title || title.length > 500 || !validHttpUrl(url) || (icon !== undefined && typeof icon !== 'string'))
     return res.status(400).json({ error: 'title und gültige url erforderlich' });
   const list = getBraveUrls();
   const entry = { id: 'b-' + Date.now(), title, url, icon: icon || '🌐' };
@@ -268,8 +396,9 @@ app.delete('/api/brave-urls/:id', (req, res) => {
 
 app.get('/api/brave-media', (_req, res) => res.json(getMediaTiles()));
 app.post('/api/brave-media', (req, res) => {
-  const { title, url, icon, color } = req.body;
-  if (!title || !url || !/^https?:\/\//i.test(url))
+  const { title, url, icon, color } = req.body || {};
+  if (typeof title !== 'string' || !title || title.length > 500 || !validHttpUrl(url) ||
+      (icon !== undefined && typeof icon !== 'string') || (color !== undefined && !/^#[0-9a-f]{6}$/i.test(color)))
     return res.status(400).json({ error: 'title und gültige url erforderlich' });
   const list = getMediaTiles();
   const entry = { id: 'm-' + Date.now(), title, url, icon: icon || '🌐', color: color || '#555555' };
@@ -290,13 +419,9 @@ app.post('/api/restart', (_req, res) => {
 
 // Brave als Standard-Browser setzen (ohne Interaktion am Fire TV)
 app.post('/api/set-default-browser', (_req, res) => {
-  const s = getSettings();
-  const adbPath = s.adbPath || ADB_DEFAULT;
-  const device  = `${s.firestickIp || '192.168.8.177'}:5555`;
-  exec(`"${adbPath}" -s ${device} shell cmd package set-default-browser ${BRAVE_PKG}`, (err, stdout, stderr) => {
+  runAdb(['shell', 'cmd', 'package', 'set-default-browser', BRAVE_PKG], (err, stdout) => {
     if (err) {
-      // Fallback: preferred-activity via intent
-      exec(`"${adbPath}" -s ${device} shell pm set-preferred-activity --action android.intent.action.VIEW --category android.intent.category.DEFAULT --category android.intent.category.BROWSABLE --scheme http ${BRAVE_PKG}/.app.BraveActivity`, (err2, out2) => {
+      runAdb(['shell', 'pm', 'set-preferred-activity', '--action', 'android.intent.action.VIEW', '--category', 'android.intent.category.DEFAULT', '--category', 'android.intent.category.BROWSABLE', '--scheme', 'http', BRAVE_PKG + '/.app.BraveActivity'], (err2, out2) => {
         res.json({ ok: !err2, stdout: out2, error: err2 ? err2.message : null });
       });
     } else {
@@ -311,10 +436,7 @@ app.post('/api/adb-key', (req, res) => {
   if (!keycode || !/^\d+$/.test(String(keycode))) {
     return res.status(400).json({ ok: false, error: 'Ungültiger Keycode' });
   }
-  const s = getSettings();
-  const adbPath = s.adbPath || ADB_DEFAULT;
-  const device  = `${s.firestickIp || '192.168.8.177'}:5555`;
-  exec(`"${adbPath}" -s ${device} shell input keyevent ${keycode}`, (err, stdout) => {
+  runAdb(['shell', 'input', 'keyevent', String(keycode)], (err, stdout) => {
     res.json({ ok: !err, stdout, error: err ? err.message : null });
   });
 });
@@ -327,47 +449,41 @@ app.post('/api/adb-tap', (req, res) => {
   if (isNaN(xi) || isNaN(yi) || xi < 0 || yi < 0 || xi > 3840 || yi > 2160) {
     return res.status(400).json({ ok: false, error: 'Ungültige Koordinaten' });
   }
-  const s = getSettings();
-  const adbPath = s.adbPath || ADB_DEFAULT;
-  const device  = `${s.firestickIp || '192.168.8.177'}:5555`;
-  exec(`"${adbPath}" -s ${device} shell input tap ${xi} ${yi}`, (err, stdout) => {
+  runAdb(['shell', 'input', 'tap', String(xi), String(yi)], (err, stdout) => {
     res.json({ ok: !err, stdout, error: err ? err.message : null });
   });
 });
 
-// Text-Eingabe per ADB (spawn statt exec → kein Shell-Injection-Risiko)
 app.post('/api/adb-text', (req, res) => {
   const { text } = req.body || {};
   if (!text || typeof text !== 'string' || text.length > 200) {
     return res.status(400).json({ ok: false, error: 'Ungültiger Text' });
   }
-  const s = getSettings();
-  const adbPath = s.adbPath || ADB_DEFAULT;
-  const device  = `${s.firestickIp || '192.168.8.177'}:5555`;
-  // Leerzeichen müssen für Android input text als %s kodiert werden
   const androidText = text.replace(/ /g, '%s');
-  const child = spawn(adbPath, ['-s', device, 'shell', 'input', 'text', androidText]);
-  child.on('close', (code) => res.json({ ok: code === 0 }));
-  child.on('error', (err) => res.status(500).json({ ok: false, error: err.message }));
+  runAdb(['shell', 'input', 'text', shellQuote(androidText)], (err) => {
+    if (err) return res.status(500).json({ ok: false, error: err.message });
+    res.json({ ok: true });
+  });
 });
 
 // Screenshot vom Fire TV aufnehmen und als PNG zurückgeben
+let screenshotInProgress = false;
 app.get('/api/firetv-screenshot', (req, res) => {
-  const s = getSettings();
-  const adbPath = s.adbPath || ADB_DEFAULT;
-  const device  = `${s.firestickIp || '192.168.8.177'}:5555`;
+  if (screenshotInProgress) return res.status(429).json({ ok: false, error: 'Screenshot bereits in Arbeit' });
+  screenshotInProgress = true;
   const tmpFile = path.join(DATA_DIR, 'firetv-screen.png');
-
-  // Screenshot auf Gerät aufnehmen, dann zum PC ziehen
-  exec(`"${adbPath}" -s ${device} shell screencap -p /sdcard/_dash_screen.png`, (err) => {
-    if (err) return res.status(500).json({ ok: false, error: err.message });
-    exec(`"${adbPath}" -s ${device} pull /sdcard/_dash_screen.png "${tmpFile}"`, (err2) => {
-      if (err2) return res.status(500).json({ ok: false, error: err2.message });
-      // Auflösung des Geräts ermitteln
-      exec(`"${adbPath}" -s ${device} shell wm size`, (err3, sizeOut) => {
+  const fail = err => { screenshotInProgress = false; res.status(500).json({ ok: false, error: err.message }); };
+  runAdb(['shell', 'screencap', '-p', '/sdcard/_dash_screen.png'], (err) => {
+    if (err) return fail(err);
+    runAdb(['pull', '/sdcard/_dash_screen.png', tmpFile], (err2) => {
+      if (err2) return fail(err2);
+      runAdb(['shell', 'wm', 'size'], (err3, sizeOut) => {
+        screenshotInProgress = false;
+        if (err3) return res.status(500).json({ ok: false, error: err3.message });
         const match = (sizeOut || '').match(/(\d+)x(\d+)/);
-        const w = match ? parseInt(match[1]) : 1920;
-        const h = match ? parseInt(match[2]) : 1080;
+        if (!match) return res.status(500).json({ ok: false, error: 'Bildschirmaufloesung nicht ermittelbar' });
+        const w = parseInt(match[1], 10);
+        const h = parseInt(match[2], 10);
         res.json({ ok: true, width: w, height: h, ts: Date.now() });
       });
     });
@@ -376,12 +492,9 @@ app.get('/api/firetv-screenshot', (req, res) => {
 
 // Fully Kiosk beenden + TV Launcher starten (damit Fernbedienung wieder funktioniert)
 app.post('/api/fully-stop', (_req, res) => {
-  const s = getSettings();
-  const adbPath = s.adbPath || ADB_DEFAULT;
-  const device  = `${s.firestickIp || '192.168.8.177'}:5555`;
-  exec(`"${adbPath}" -s ${device} shell am force-stop de.ozerov.fully`, (err) => {
+  runAdb(['shell', 'am', 'force-stop', 'de.ozerov.fully'], (err) => {
     if (err) return res.status(500).json({ ok: false, error: err.message });
-    exec(`"${adbPath}" -s ${device} shell am start -n com.amazon.tv.launcher/.ui.MainActivity`, (err2) => {
+    runAdb(['shell', 'am', 'start', '-n', 'com.amazon.tv.launcher/.ui.MainActivity'], (err2) => {
       res.json({ ok: !err2, error: err2 ? err2.message : null });
     });
   });
@@ -389,10 +502,7 @@ app.post('/api/fully-stop', (_req, res) => {
 
 // Fully Kiosk starten
 app.post('/api/fully-start', (_req, res) => {
-  const s = getSettings();
-  const adbPath = s.adbPath || ADB_DEFAULT;
-  const device  = `${s.firestickIp || '192.168.8.177'}:5555`;
-  exec(`"${adbPath}" -s ${device} shell am start -n de.ozerov.fully/.MainActivity`, (err) => {
+  runAdb(['shell', 'am', 'start', '-n', 'de.ozerov.fully/.MainActivity'], (err) => {
     res.json({ ok: !err, error: err ? err.message : null });
   });
 });
@@ -407,22 +517,26 @@ app.get('/api/firetv-screen.png', (req, res) => {
 app.listen(PORT, () => {
   console.log('Dashboard: http://localhost:' + PORT);
   console.log('Admin:     http://localhost:' + PORT + '/admin.html');
+  if (!ADMIN_PASSWORD) console.warn('[Admin] KIOSK_ADMIN_PASSWORD fehlt; Verwaltung ist gesperrt.');
   autoLaunchKiosk();
 });
 
 function autoLaunchKiosk() {
   const s = getSettings();
   const adbPath = s.adbPath || ADB_DEFAULT;
-  const device  = `${s.firestickIp || '192.168.8.177'}:5555`;
+  const device  = `${s.firestickIp || ''}:5555`;
   const dashUrl = `http://${s.serverIp || getLocalIP()}:${PUBLIC_PORT}`;
-  exec(`"${adbPath}" connect ${device}`, (err, stdout) => {
+  if (!/^[a-z0-9._-]+$/i.test(String(s.firestickIp || ''))) {
+    console.log('[Kiosk] Fire-Stick-Adresse nicht konfiguriert oder ungueltig.');
+    return;
+  }
+  execFile(adbPath, ['connect', device], { timeout: 15000 }, (err, stdout) => {
     if (err || (!stdout.includes('connected') && !stdout.includes('already connected'))) {
       console.log('[Kiosk] Fire Stick nicht erreichbar – Start übersprungen.');
       return;
     }
     // Fully Kiosk mit der aktuellen Dashboard-URL starten
-    const cmd = `"${adbPath}" -s ${device} shell am start -n de.ozerov.fully/.MainActivity -d "${dashUrl}"`;
-    exec(cmd, (e) => {
+    runAdb(['shell', 'am', 'start', '-n', 'de.ozerov.fully/.MainActivity', '-d', shellQuote(dashUrl)], (e) => {
       if (e) console.log('[Kiosk] Fully Kiosk Start fehlgeschlagen:', e.message);
       else   console.log('[Kiosk] Fully Kiosk gestartet → ' + dashUrl);
     });
@@ -432,10 +546,8 @@ function autoLaunchKiosk() {
 // Kiosk-URL manuell neu setzen (nützlich nach Port-Änderungen)
 app.post('/api/kiosk-reload', (_req, res) => {
   const s = getSettings();
-  const adbPath = s.adbPath || ADB_DEFAULT;
-  const device  = `${s.firestickIp || '192.168.8.177'}:5555`;
   const dashUrl = `http://${s.serverIp || getLocalIP()}:${PUBLIC_PORT}`;
-  exec(`"${adbPath}" -s ${device} shell am start -n de.ozerov.fully/.MainActivity -d "${dashUrl}"`, (err) => {
+  runAdb(['shell', 'am', 'start', '-n', 'de.ozerov.fully/.MainActivity', '-d', shellQuote(dashUrl)], (err) => {
     res.json({ ok: !err, url: dashUrl, error: err ? err.message : null });
   });
 });

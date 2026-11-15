@@ -27,16 +27,22 @@ Dieses Repository enthaelt die Fire-TV/Fully-Kiosk Betriebsartefakte (APKs + Set
 
 ```powershell
 cd .\Fire-Stick\scripts
-.\setup-firestick.ps1 -FirestickIp 192.168.8.177 -DashboardUrl "http://192.168.8.10:3100"
+.\setup-firestick.ps1 -FirestickIp <FIRESTICK-IP> -DashboardUrl "http://<SERVER-IP>:3200"
 ```
 
 ## Kiosk-Dashboard separat in Dockge starten
 
 1. Stack-Datei aus `kiosk-dashboard/docker-compose.yml` in Dockge verwenden.
-2. Optional `.env.example` nach `.env` kopieren und Werte anpassen.
-3. Stack starten (Standard-Port extern: `3200`).
+2. `.env.example` nach `.env` kopieren. `KIOSK_ADMIN_PASSWORD` auf ein langes, eindeutiges Passwort setzen und `SERVER_IP` sowie `FIRESTICK_IP` konfigurieren.
+3. Stack starten (Standard-Port extern: `3200`). Falls dieser Port bereits vom Dart-Dashboard verwendet wird, `KIOSK_PORT` und `PUBLIC_PORT` auf denselben freien Port setzen.
 
 Die App ist jetzt bewusst vom alten `dart-dashboard` entkoppelt.
+
+Bei einer Neuinstallation zeigt der Hub noch keine Dashboard-Kacheln. Unter `http://<SERVER-IP>:<KIOSK_PORT>/admin.html` anmelden und gewuenschte Kacheln einblenden oder eigene Links hinzufuegen. Fuer Brave zuerst die Browser-Kachel einblenden; die Browser-Verwaltung benoetigt ebenfalls die Anmeldung. Bestehende Daten und Einstellungen im Daten-Volume bleiben erhalten.
+
+Ohne `KIOSK_ADMIN_PASSWORD` ist die Verwaltung gesperrt. Die Sitzung endet nach 12 Stunden oder einem Serverneustart; im Admin-Panel ist auch eine Abmeldung moeglich. Der Hub und die dort angezeigten Panel-Ziele sind ohne Anmeldung lesbar: keine Zugangsdaten in Panel-URLs speichern.
+
+`data/`, `.env` und `adb-keys/` sind lokale Betriebsdaten und duerfen nicht in Git eingecheckt oder oeffentlich geteilt werden. Ihre Entfernung aus dem aktuellen Repository entfernt bereits veroeffentlichte Daten **nicht** aus der Git-Historie, bestehenden Klonen oder Backups. Bei kompromittierten Zugangsdaten diese austauschen und eine separate Historienbereinigung pruefen.
 
 ## Wichtige Parameter
 
@@ -86,4 +92,4 @@ Loesung:
 
 ## Sicherheits-Hinweis
 
-ADB-Debugging nur im vertrauten Netzwerk aktiv lassen.
+ADB-Debugging und den Kiosk-Port nur im vertrauten Netzwerk aktiv lassen; keine Portweiterleitung ins Internet einrichten. HTTP verschluesselt weder Passwort noch Sitzungs-Cookie. Fuer einen HTTPS-Reverse-Proxy dessen konkrete interne IP oder CIDR als `KIOSK_TRUST_PROXY` setzen, sodass das vom Proxy gesetzte `X-Forwarded-Proto` ausgewertet wird. Den App-Port dann ausschliesslich fuer den vertrauenswuerdigen Proxy erreichbar machen. Keine fremden Proxys oder ungeprueften Forwarded-Header vertrauen.

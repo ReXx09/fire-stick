@@ -321,9 +321,8 @@
     <!-- Setup / Install -->
     <div class="section-title">Einrichtung — Brave installieren</div>
     <div class="setup-box">
-      <h4>1. Brave wurde installiert &#10003;</h4>
-      Brave 1.57.57 (ARM) wurde per ADB auf deinem Fire Stick installiert.
-      Du kannst die Buttons oben direkt verwenden &mdash; Brave öffnet sich auf dem Fire Stick.
+      <h4>1. Brave auf dem Fire Stick einrichten</h4>
+      Prüfe, ob Brave auf deinem Fire Stick installiert ist. Die Buttons oben öffnen Links über ADB in Brave.
 
       <h4 style="margin-top:14px">Neu installieren / aktualisieren</h4>
       Download-URL der ARM-APK eingeben (von github.com/brave/brave-browser/releases):<br>
@@ -399,11 +398,11 @@
         card.tabIndex = 0;
         card.setAttribute('role', 'button');
         card.style.cssText = `--c:${e.color || '#FB542B'};position:relative`;
-        card.innerHTML =
-          `<button class="del-tile" onclick="event.stopPropagation();deleteMediaTile('${e.id}')" title="Entfernen">✕</button>` +
-          `<span class="icon">${e.icon || '🌐'}</span>` +
-          `<span class="label">${e.title}</span>` +
-          `<span class="sub">${host}</span>`;
+        card.innerHTML = '<button class="del-tile" title="Entfernen">✕</button><span class="icon"></span><span class="label"></span><span class="sub"></span>';
+        card.querySelector('.del-tile').addEventListener('click', event => { event.stopPropagation(); deleteMediaTile(e.id); });
+        card.querySelector('.icon').textContent = e.icon || '🌐';
+        card.querySelector('.label').textContent = e.title;
+        card.querySelector('.sub').textContent = host;
         card.addEventListener('click', () => launch(e.url, e.title));
         card.addEventListener('keydown', ev => {
           if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); launch(e.url, e.title); }
@@ -447,12 +446,13 @@
         form.style.display = 'none';
         loadMedia();
         showToast('Kachel hinzugefügt ✓', 'ok');
-      }
+      } else showToast('Kachel konnte nicht gespeichert werden (HTTP ' + r.status + ')', 'err');
     }
 
     async function deleteMediaTile(id) {
       if (!confirm('Kachel entfernen?')) return;
-      await fetch('/api/brave-media/' + id, { method: 'DELETE' });
+      const response = await fetch('/api/brave-media/' + id, { method: 'DELETE' });
+      if (!response.ok) return showToast('Kachel konnte nicht gelöscht werden (HTTP ' + response.status + ')', 'err');
       loadMedia();
     }
 
@@ -472,11 +472,12 @@
       list.forEach(e => {
         const row = document.createElement('div');
         row.className = 'custom-item';
-        row.innerHTML =
-          `<span class="ci-icon">${e.icon || '🌐'}</span>` +
-          `<div class="ci-info"><div class="ci-title">${e.title}</div><div class="ci-url">${e.url}</div></div>` +
-          `<button class="ci-launch-btn" onclick="launch('${e.url}','${e.title}')">&#9654; Öffnen</button>` +
-          `<button class="ci-del-btn" onclick="deleteUrl('${e.id}')">✕</button>`;
+        row.innerHTML = '<span class="ci-icon"></span><div class="ci-info"><div class="ci-title"></div><div class="ci-url"></div></div><button class="ci-launch-btn">&#9654; Öffnen</button><button class="ci-del-btn">✕</button>';
+        row.querySelector('.ci-icon').textContent = e.icon || '🌐';
+        row.querySelector('.ci-title').textContent = e.title;
+        row.querySelector('.ci-url').textContent = e.url;
+        row.querySelector('.ci-launch-btn').addEventListener('click', () => launch(e.url, e.title));
+        row.querySelector('.ci-del-btn').addEventListener('click', () => deleteUrl(e.id));
         el.appendChild(row);
       });
     }
@@ -523,13 +524,14 @@
         form.querySelector('[name="icon"]').value = '';
         loadCustom();
         showToast('Link gespeichert ✓', 'ok');
-      }
+      } else showToast('Link konnte nicht gespeichert werden (HTTP ' + r.status + ')', 'err');
     }
 
     // ── Delete custom URL ──
     async function deleteUrl(id) {
       if (!confirm('Link löschen?')) return;
-      await fetch('/api/brave-urls/' + id, { method: 'DELETE' });
+      const response = await fetch('/api/brave-urls/' + id, { method: 'DELETE' });
+      if (!response.ok) return showToast('Link konnte nicht gelöscht werden (HTTP ' + response.status + ')', 'err');
       loadCustom();
     }
 
@@ -642,7 +644,7 @@
 
     // ── Fire TV Live-Ansicht ──
     let _ftW = 1920, _ftH = 1080;
-    let liveMode = false, liveInterval = null;
+    let liveMode = false, liveInterval = null, screenshotPending = false;
     let textBuffer = '', textTimer = null;
 
     // Android-Keycode-Mapping für Sondertasten
@@ -681,17 +683,23 @@
 
     // Screenshot ohne Status-Update (für das 1s-Polling im Live-Modus)
     async function ftScreenshotSilent() {
+      if (screenshotPending) return;
+      screenshotPending = true;
       try {
         const r = await fetch('/api/firetv-screenshot');
         const d = await r.json();
-        if (!d.ok) return;
+        if (!d.ok) throw new Error(d.error || 'Screenshot fehlgeschlagen');
         _ftW = d.width; _ftH = d.height;
         const img = document.getElementById('ftImg');
         img.src = '/api/firetv-screen.png?t=' + d.ts;
         img.style.display = 'block';
         document.getElementById('ftPlaceholder').style.display = 'none';
         document.getElementById('ftHint').style.display = 'block';
-      } catch { /* still in background, ignore */ }
+      } catch (error) {
+        document.getElementById('ftStatus').textContent = 'Live-Ansicht: ' + error.message;
+      } finally {
+        screenshotPending = false;
+      }
     }
 
     // ── Tastatur-Capture ──
@@ -719,11 +727,6 @@
       }
     });
 
-    // Im Live-Modus: Fokus bei Blur sofort wiederherstellen
-    kbCapture.addEventListener('blur', () => {
-      if (liveMode) setTimeout(() => kbCapture.focus(), 30);
-    });
-
     async function flushTextBuffer() {
       clearTimeout(textTimer);
       if (!textBuffer) return;
@@ -731,11 +734,13 @@
       textBuffer = '';
       setKbPreview(text + ' → sendet…');
       try {
-        await fetch('/api/adb-text', {
+        const response = await fetch('/api/adb-text', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ text })
         });
+        const result = await response.json();
+        if (!response.ok || !result.ok) throw new Error(result.error || 'Eingabe fehlgeschlagen');
         setKbPreview(text + ' ✓');
         if (liveMode) setTimeout(ftScreenshotSilent, 400);
       } catch {

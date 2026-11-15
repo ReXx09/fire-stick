@@ -4,16 +4,18 @@ services:
     container_name: fire-kiosk-dashboard
     restart: unless-stopped
     ports:
-      - "3200:3000"
+      - "${KIOSK_PORT:-3200}:3000"
     volumes:
       - ${DATA_PATH:-./data}:/app/data
       - ${ADB_KEYS_PATH:-./adb-keys}:/root/.android
     environment:
       - NODE_ENV=production
+      - KIOSK_ADMIN_PASSWORD=${KIOSK_ADMIN_PASSWORD:-}
+      - KIOSK_TRUST_PROXY=${KIOSK_TRUST_PROXY:-}
       - PORT=3000
       - PUBLIC_PORT=${PUBLIC_PORT:-3200}
       - FIRE_FEATURES_ENABLED=true
-      - FIRESTICK_IP=${FIRESTICK_IP:-192.168.8.177}
+      - FIRESTICK_IP=${FIRESTICK_IP:-}
       - SERVER_IP=${SERVER_IP:-}
       - DART_DASHBOARD_PORT=${DART_DASHBOARD_PORT:-3000}
       - DART_DASHBOARD_URL=${DART_DASHBOARD_URL:-}

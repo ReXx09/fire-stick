@@ -3,3 +3,5 @@ apks/Brave157-armv7.apk
 kiosk-dashboard/node_modules/
 kiosk-dashboard/data/firetv-screen.png
 kiosk-dashboard/.env
+kiosk-dashboard/data/
+kiosk-dashboard/adb-keys/

@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$FirestickIp = $(if ($env:FIRESTICK_IP) { $env:FIRESTICK_IP } else { "192.168.8.177" }),
+    [string]$FirestickIp = $env:FIRESTICK_IP,
     [int]$AdbPort = 5555,
     [string]$DashboardUrl,
     [string]$ExpectedApkSha256,
@@ -164,6 +164,7 @@ function Ensure-FullyHealthy {
 }
 
 Ensure-AdbAvailable
+if (-not $FirestickIp) { Fail "Bitte -FirestickIp angeben oder FIRESTICK_IP setzen." }
 Connect-Device
 Validate-Apk
 Install-FullyKiosk
