@@ -308,6 +308,7 @@
 
       <div class="settings-card">
         <h3>ADB &amp; Fire Stick</h3>
+        <p class="info-txt">Gespeicherte Einstellungen haben Vorrang vor Docker-Umgebungsvariablen. Docker-Werte gelten als Startwerte, solange hier kein Wert gespeichert wurde. Vor dem Verbindungstest Änderungen speichern.</p>
         <div class="field">
           <label>ADB-Pfad (nur ändern wenn nicht in Docker)</label>
           <input type="text" id="s-adbpath" placeholder="adb &nbsp;← Standard im Docker-Container" />
@@ -908,11 +909,7 @@
     const el = document.getElementById('adb-test-status');
     el.textContent = 'Teste…'; el.style.color = '#f4a261';
     try {
-      const r = await fetch('/api/adb/launch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: 'https://www.google.com' })
-      });
+      const r = await fetch('/api/adb/status');
       const d = await r.json();
       if (r.ok) { el.textContent = '✓ Verbindung OK'; el.style.color = '#2ec4b6'; }
       else       { el.textContent = '✗ ' + d.error;     el.style.color = '#e63946'; }

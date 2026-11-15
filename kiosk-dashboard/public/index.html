@@ -391,6 +391,7 @@
       const ssD = document.getElementById('ss-date');
       let timer = null;
       let ssTimeout = 2 * 60 * 1000;
+      let ssEnabled = false;
 
       function showSS() {
         ss.classList.add('active');
@@ -403,7 +404,7 @@
       }
       function resetTimer() {
         clearTimeout(timer);
-        timer = setTimeout(showSS, ssTimeout);
+        if (ssEnabled) timer = setTimeout(showSS, ssTimeout);
       }
 
       function updateSSClock() {
@@ -421,7 +422,12 @@
       // Wird nach dem Settings-Fetch aufgerufen
       window._initScreensaver = function(enabled, minutes) {
         clearTimeout(timer);
-        if (!enabled) return;
+        ssEnabled = enabled;
+        if (!enabled) {
+          ss.classList.remove('active');
+          document.body.style.cursor = '';
+          return;
+        }
         ssTimeout = Math.max(1, minutes || 2) * 60 * 1000;
         resetTimer();
       };
@@ -443,6 +449,7 @@
       document.addEventListener('keydown', function (e) {
         const DIRS = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
         if (!DIRS.includes(e.key)) return;
+        if (isTypingTarget(e.target)) return;
         e.preventDefault(); // sofort – verhindert Seiten-Scroll
 
         const all = focusables();

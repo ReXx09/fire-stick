@@ -292,10 +292,10 @@ app.put('/api/settings', (req, res) => {
       (req.body.serverIp !== undefined && (typeof req.body.serverIp !== 'string' || (req.body.serverIp && !/^[a-z0-9._-]+$/i.test(req.body.serverIp))))) {
     return res.status(400).json({ error: 'Ungueltige Einstellungen' });
   }
-  const s = { ...getSettings(), ...req.body };
+  const s = { ...readJson(SETTINGS_FILE, {}), ...req.body };
   saveSettings(s);
   broadcastReload();
-  res.json(s);
+  res.json(getSettings());
 });
 
 // SSE – Live-Push an alle offenen Dashboard-Browser
@@ -333,12 +333,55 @@ function validHttpUrl(value) {
   try { return ['http:', 'https:'].includes(new URL(value).protocol); } catch { return false; }
 }
 function shellQuote(value) { return "'" + value.replace(/'/g, "'\\''") + "'"; }
+let adbConnection = null;
+function connectAdb(settings) {
+  const device = String(settings.firestickIp || '');
+  if (!/^[a-z0-9._-]+$/i.test(device)) return Promise.reject(new Error('Ungueltige Fire-Stick-Adresse'));
+  const adbPath = settings.adbPath || ADB_DEFAULT;
+  const target = device + ':5555';
+  const key = JSON.stringify([adbPath, target]);
+  if (adbConnection && adbConnection.key === key) return adbConnection.promise;
+  const connection = { key };
+  connection.promise = new Promise((resolve, reject) => {
+    execFile(adbPath, ['connect', target], { timeout: 15000 }, (err, stdout, stderr) => {
+      if (err) return reject(new Error((stderr || err.message).trim()));
+      if (!/^(?:already connected to|connected to)\s/m.test(stdout || '')) {
+        return reject(new Error((stdout || stderr || 'ADB-Verbindung fehlgeschlagen').trim()));
+      }
+      resolve();
+    });
+  }).catch(error => {
+    if (adbConnection === connection) adbConnection = null;
+    throw error;
+  });
+  adbConnection = connection;
+  return connection.promise;
+}
 function runAdb(args, callback, timeout = 15000) {
   const settings = getSettings();
-  const device = String(settings.firestickIp || '');
-  if (!/^[a-z0-9._-]+$/i.test(device)) return callback(new Error('Ungueltige Fire-Stick-Adresse'), '', '');
-  execFile(settings.adbPath || ADB_DEFAULT, ['-s', device + ':5555', ...args], { timeout }, callback);
+  const target = String(settings.firestickIp || '') + ':5555';
+  const key = JSON.stringify([settings.adbPath || ADB_DEFAULT, target]);
+  function run(retry) {
+    connectAdb(settings).then(() => {
+      execFile(settings.adbPath || ADB_DEFAULT, ['-s', target, ...args], { timeout }, (err, stdout, stderr) => {
+        if (err && adbConnection && adbConnection.key === key) adbConnection = null;
+        if (err && retry && /(?:error:\s*)?device(?:\s+['"][^'"]+['"])?\s+(?:offline|not found)\b/i.test(stderr || err.message)) {
+          return run(false);
+        }
+        callback(err, stdout, stderr);
+      });
+    }, error => callback(error, '', ''));
+  }
+  run(true);
 }
+
+app.get('/api/adb/status', (_req, res) => {
+  runAdb(['get-state'], (err, stdout, stderr) => {
+    if (err) return res.status(500).json({ error: (stderr || err.message).trim() });
+    if (stdout.trim() !== 'device') return res.status(500).json({ error: 'Fire Stick nicht bereit: ' + stdout.trim() });
+    res.json({ ok: true });
+  });
+});
 
 app.post('/api/adb/install', async (req, res) => {
   const { apkPath } = req.body || {};
@@ -480,7 +523,9 @@ app.get('/api/firetv-screenshot', (req, res) => {
       runAdb(['shell', 'wm', 'size'], (err3, sizeOut) => {
         screenshotInProgress = false;
         if (err3) return res.status(500).json({ ok: false, error: err3.message });
-        const match = (sizeOut || '').match(/(\d+)x(\d+)/);
+        const output = sizeOut || '';
+        const match = output.match(/Override size:\s*(\d+)x(\d+)/i) ||
+          output.match(/Physical size:\s*(\d+)x(\d+)/i) || output.match(/(\d+)x(\d+)/);
         if (!match) return res.status(500).json({ ok: false, error: 'Bildschirmaufloesung nicht ermittelbar' });
         const w = parseInt(match[1], 10);
         const h = parseInt(match[2], 10);
@@ -523,23 +568,14 @@ app.listen(PORT, () => {
 
 function autoLaunchKiosk() {
   const s = getSettings();
-  const adbPath = s.adbPath || ADB_DEFAULT;
-  const device  = `${s.firestickIp || ''}:5555`;
   const dashUrl = `http://${s.serverIp || getLocalIP()}:${PUBLIC_PORT}`;
   if (!/^[a-z0-9._-]+$/i.test(String(s.firestickIp || ''))) {
     console.log('[Kiosk] Fire-Stick-Adresse nicht konfiguriert oder ungueltig.');
     return;
   }
-  execFile(adbPath, ['connect', device], { timeout: 15000 }, (err, stdout) => {
-    if (err || (!stdout.includes('connected') && !stdout.includes('already connected'))) {
-      console.log('[Kiosk] Fire Stick nicht erreichbar – Start übersprungen.');
-      return;
-    }
-    // Fully Kiosk mit der aktuellen Dashboard-URL starten
-    runAdb(['shell', 'am', 'start', '-n', 'de.ozerov.fully/.MainActivity', '-d', shellQuote(dashUrl)], (e) => {
-      if (e) console.log('[Kiosk] Fully Kiosk Start fehlgeschlagen:', e.message);
-      else   console.log('[Kiosk] Fully Kiosk gestartet → ' + dashUrl);
-    });
+  runAdb(['shell', 'am', 'start', '-n', 'de.ozerov.fully/.MainActivity', '-d', shellQuote(dashUrl)], (err) => {
+    if (err) console.log('[Kiosk] Fully Kiosk Start fehlgeschlagen:', err.message);
+    else console.log('[Kiosk] Fully Kiosk gestartet → ' + dashUrl);
   });
 }
 

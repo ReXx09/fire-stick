@@ -15,7 +15,7 @@ async function freePort() {
   return port;
 }
 
-async function fixture(t, password = 'test-password', mockAdb = false, overrides = null) {
+async function fixture(t, password = 'test-password', mockAdb = false, overrides = null, env = {}) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'kiosk-test-'));
   await fs.copyFile(path.join(__dirname, '..', 'server.js'), path.join(root, 'server.js'));
   await fs.cp(path.join(__dirname, '..', 'public'), path.join(root, 'public'), { recursive: true });
@@ -32,7 +32,21 @@ async function fixture(t, password = 'test-password', mockAdb = false, overrides
       const fs = require('fs');
       require('child_process').execFile = (_bin, args, _options, callback) => {
         fs.appendFileSync(${JSON.stringify(calls)}, JSON.stringify(args) + '\\n');
-        setTimeout(() => callback(null, args.includes('size') ? 'Physical size: 1920x1080' : 'OK', ''), 80);
+        const offline = ${JSON.stringify(path.join(root, 'adb-offline-once'))};
+        const connectFailure = ${JSON.stringify(path.join(root, 'adb-connect-failure'))};
+        setTimeout(() => {
+          if (args[0] === 'connect' && fs.existsSync(connectFailure)) {
+            return callback(null, 'failed to connect to ' + args[1], '');
+          }
+          if (args[0] !== 'connect' && fs.existsSync(offline)) {
+            fs.unlinkSync(offline);
+            return callback(new Error('device offline'), '', 'error: device offline');
+          }
+          const output = args[0] === 'connect' ? 'connected to ' + args[1] :
+            args.includes('size') ? (process.env.ADB_MOCK_SIZE || 'Physical size: 1920x1080') :
+            args.includes('get-state') ? 'device' : 'OK';
+          callback(null, output, '');
+        }, 80);
       };
     `);
   }
@@ -40,7 +54,7 @@ async function fixture(t, password = 'test-password', mockAdb = false, overrides
   async function start() {
     const args = mockAdb ? ['--require', preload, path.join(root, 'server.js')] : [path.join(root, 'server.js')];
     child = spawn(process.execPath, args, {
-      env: { ...process.env, NODE_PATH: path.join(__dirname, '..', 'node_modules'), PORT: String(port), FIRESTICK_IP: mockAdb ? '127.0.0.1' : '', KIOSK_ADMIN_PASSWORD: password },
+      env: { ...process.env, NODE_PATH: path.join(__dirname, '..', 'node_modules'), PORT: String(port), FIRESTICK_IP: mockAdb ? '127.0.0.1' : '', KIOSK_ADMIN_PASSWORD: password, ...env },
       stdio: 'ignore'
     });
     for (let i = 0; i < 100; i++) {
@@ -129,21 +143,6 @@ test('APK download follows redirects before attempting ADB', async t => {
     res.end('fake apk');
   });
 
-  test('ADB receives a quoted URL and concurrent screenshots do not overlap', async t => {
-    const { base, calls } = await fixture(t, 'test-password', true);
-    const cookie = await login(base);
-    const url = "https://example.com/a'$(danger)";
-    const launch = await request(base, '/api/adb/launch', { method: 'POST', cookie, body: { url } });
-    assert.equal(launch.status, 200);
-    const first = request(base, '/api/firetv-screenshot', { cookie });
-    await new Promise(resolve => setTimeout(resolve, 30));
-    assert.equal((await request(base, '/api/firetv-screenshot', { cookie })).status, 429);
-    assert.equal((await first).status, 200);
-    const recorded = (await fs.readFile(calls, 'utf8')).trim().split('\n').map(line => JSON.parse(line));
-    const launchArgs = recorded.find(args => args.includes('android.intent.action.VIEW'));
-    assert.equal(launchArgs[launchArgs.indexOf('-d') + 1], "'https://example.com/a'\\''$(danger)'");
-    assert.equal(recorded.filter(args => args.includes('screencap')).length, 1);
-  });
   await new Promise(resolve => mock.listen(0, '127.0.0.1', resolve));
   t.after(() => new Promise(resolve => mock.close(resolve)));
   const cookie = await login(base);
@@ -151,4 +150,89 @@ test('APK download follows redirects before attempting ADB', async t => {
   assert.equal(response.status, 500);
   assert.equal(downloaded, true);
   assert.doesNotMatch((await response.json()).error, /HTTP 302/);
+});
+
+test('ADB receives a quoted URL and concurrent screenshots do not overlap', async t => {
+  const { base, calls } = await fixture(t, 'test-password', true);
+  const cookie = await login(base);
+  const url = "https://example.com/a'$(danger)";
+  const launch = await request(base, '/api/adb/launch', { method: 'POST', cookie, body: { url } });
+  assert.equal(launch.status, 200);
+  const first = request(base, '/api/firetv-screenshot', { cookie });
+  await new Promise(resolve => setTimeout(resolve, 30));
+  assert.equal((await request(base, '/api/firetv-screenshot', { cookie })).status, 429);
+  const screenshot = await first;
+  assert.equal(screenshot.status, 200);
+  const size = await screenshot.json();
+  assert.equal(size.width, 1920);
+  assert.equal(size.height, 1080);
+  const recorded = (await fs.readFile(calls, 'utf8')).trim().split('\n').map(line => JSON.parse(line));
+  const launchArgs = recorded.find(args => args.includes('android.intent.action.VIEW'));
+  assert.equal(launchArgs[launchArgs.indexOf('-d') + 1], "'https://example.com/a'\\''$(danger)'");
+  assert.equal(recorded.filter(args => args.includes('screencap')).length, 1);
+});
+
+test('ADB connects to changed address, tests status without launching, and reconnects when offline', async t => {
+  const { base, root, calls } = await fixture(t, 'test-password', true, null, { FIRESTICK_IP: '' });
+  const cookie = await login(base);
+  assert.equal((await request(base, '/api/adb/status')).status, 401);
+  assert.equal((await request(base, '/api/settings', { method: 'PUT', cookie, body: { firestickIp: '192.0.2.10' } })).status, 200);
+  assert.equal((await request(base, '/api/adb/status', { cookie })).status, 200);
+  let recorded = (await fs.readFile(calls, 'utf8')).trim().split('\n').map(line => JSON.parse(line));
+  assert.deepEqual(recorded, [['connect', '192.0.2.10:5555'], ['-s', '192.0.2.10:5555', 'get-state']]);
+
+  await fs.writeFile(path.join(root, 'adb-offline-once'), '');
+  assert.equal((await request(base, '/api/adb/status', { cookie })).status, 200);
+  recorded = (await fs.readFile(calls, 'utf8')).trim().split('\n').map(line => JSON.parse(line));
+  assert.deepEqual(recorded.slice(2), [
+    ['-s', '192.0.2.10:5555', 'get-state'],
+    ['connect', '192.0.2.10:5555'],
+    ['-s', '192.0.2.10:5555', 'get-state']
+  ]);
+  assert.equal((await request(base, '/api/settings', { method: 'PUT', cookie, body: { firestickIp: '192.0.2.20' } })).status, 200);
+  assert.equal((await request(base, '/api/adb/status', { cookie })).status, 200);
+  recorded = (await fs.readFile(calls, 'utf8')).trim().split('\n').map(line => JSON.parse(line));
+  assert.deepEqual(recorded.slice(-2), [['connect', '192.0.2.20:5555'], ['-s', '192.0.2.20:5555', 'get-state']]);
+
+  await request(base, '/api/settings', { method: 'PUT', cookie, body: { firestickIp: '192.0.2.30' } });
+  await fs.writeFile(path.join(root, 'adb-connect-failure'), '');
+  const failure = await request(base, '/api/adb/status', { cookie });
+  assert.equal(failure.status, 500);
+  assert.match((await failure.json()).error, /failed to connect/);
+  await fs.unlink(path.join(root, 'adb-connect-failure'));
+  assert.equal((await request(base, '/api/adb/status', { cookie })).status, 200);
+});
+
+test('screenshot uses override resolution when available', async t => {
+  const { base } = await fixture(t, 'test-password', true, null, {
+    ADB_MOCK_SIZE: 'Physical size: 1920x1080\nOverride size: 1280x720'
+  });
+  const cookie = await login(base);
+  const response = await request(base, '/api/firetv-screenshot', { cookie });
+  assert.equal(response.status, 200);
+  const result = await response.json();
+  assert.equal(result.width, 1280);
+  assert.equal(result.height, 720);
+});
+
+test('environment settings remain defaults until explicitly saved', async t => {
+  const env = { FIRESTICK_IP: '192.0.2.10' };
+  const { base, root, stop, start } = await fixture(t, 'test-password', true, null, env);
+  let cookie = await login(base);
+  assert.equal((await (await request(base, '/api/settings', { cookie })).json()).firestickIp, '192.0.2.10');
+  await request(base, '/api/settings', { method: 'PUT', cookie, body: { hubTitle: 'Test' } });
+  const saved = JSON.parse(await fs.readFile(path.join(root, 'data', 'settings.json'), 'utf8'));
+  assert.equal(saved.firestickIp, undefined);
+  await stop();
+  env.FIRESTICK_IP = '192.0.2.11';
+  await start();
+  cookie = await login(base);
+  assert.equal((await (await request(base, '/api/settings', { cookie })).json()).firestickIp, '192.0.2.11');
+  const updated = await request(base, '/api/settings', { method: 'PUT', cookie, body: { firestickIp: '192.0.2.20' } });
+  assert.equal((await updated.json()).firestickIp, '192.0.2.20');
+  await stop();
+  env.FIRESTICK_IP = '192.0.2.12';
+  await start();
+  cookie = await login(base);
+  assert.equal((await (await request(base, '/api/settings', { cookie })).json()).firestickIp, '192.0.2.20');
 });

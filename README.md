@@ -40,6 +40,8 @@ Die App ist jetzt bewusst vom alten `dart-dashboard` entkoppelt.
 
 Bei einer Neuinstallation zeigt der Hub noch keine Dashboard-Kacheln. Unter `http://<SERVER-IP>:<KIOSK_PORT>/admin.html` anmelden und gewuenschte Kacheln einblenden oder eigene Links hinzufuegen. Fuer Brave zuerst die Browser-Kachel einblenden; die Browser-Verwaltung benoetigt ebenfalls die Anmeldung. Bestehende Daten und Einstellungen im Daten-Volume bleiben erhalten.
 
+Gespeicherte Admin-Einstellungen haben Vorrang vor den zugehoerigen Umgebungsvariablen: `FIRESTICK_IP` und `ADB_PATH` dienen als Startwerte, bis sie im Admin-Bereich gespeichert werden. Die Server-Adresse wird entsprechend im Admin-Bereich eingestellt; `SERVER_IP` dient zur automatischen Erkennung als Vorgabe. Nachtraegliche Aenderungen in Compose ersetzen gespeicherte Werte nicht. Aendere sie im Admin-Bereich; andere gespeicherte Einstellungen und das Daten-Volume bleiben dabei erhalten. Der ADB-Verbindungstest prueft den Geraetestatus, ohne eine Webseite zu oeffnen.
+
 Ohne `KIOSK_ADMIN_PASSWORD` ist die Verwaltung gesperrt. Die Sitzung endet nach 12 Stunden oder einem Serverneustart; im Admin-Panel ist auch eine Abmeldung moeglich. Der Hub und die dort angezeigten Panel-Ziele sind ohne Anmeldung lesbar: keine Zugangsdaten in Panel-URLs speichern.
 
 `data/`, `.env` und `adb-keys/` sind lokale Betriebsdaten und duerfen nicht in Git eingecheckt oder oeffentlich geteilt werden. Ihre Entfernung aus dem aktuellen Repository entfernt bereits veroeffentlichte Daten **nicht** aus der Git-Historie, bestehenden Klonen oder Backups. Bei kompromittierten Zugangsdaten diese austauschen und eine separate Historienbereinigung pruefen.
